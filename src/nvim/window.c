@@ -735,16 +735,13 @@ static void cmd_with_count(char *cmd, char *bufp, size_t bufsize, int64_t Prenum
   }
 }
 
-void win_set_buf(win_T *win, buf_T *buf, bool noautocmd, Error *err)
+void win_set_buf(win_T *win, buf_T *buf, Error *err)
   FUNC_ATTR_NONNULL_ALL
 {
   tabpage_T *tab = win_find_tabpage(win);
 
   // no redrawing and don't set the window title
   RedrawingDisabled++;
-  if (noautocmd) {
-    block_autocmds();
-  }
 
   switchwin_T switchwin;
   if (switch_win_noblock(&switchwin, win, tab, true) == FAIL) {
@@ -770,9 +767,6 @@ void win_set_buf(win_T *win, buf_T *buf, bool noautocmd, Error *err)
 
 cleanup:
   restore_win_noblock(&switchwin, true);
-  if (noautocmd) {
-    unblock_autocmds();
-  }
   RedrawingDisabled--;
 }
 
@@ -1959,6 +1953,7 @@ int win_splitmove(win_T *wp, int size, int flags)
     // Remove the window and frame from the tree of frames.  Don't flatten any
     // frames yet so we can restore things if win_split_ins fails.
     winframe_remove(wp, &dir, NULL, &unflat_altfr);
+    assert(unflat_altfr != NULL);
     win_remove(wp, NULL);
     last_status(false);  // may need to remove last status line
     win_comp_pos();  // recompute window positions
@@ -1967,6 +1962,7 @@ int win_splitmove(win_T *wp, int size, int flags)
   // Split a window on the desired side and put "wp" there.
   if (win_split_ins(size, flags, wp, dir, unflat_altfr) == NULL) {
     if (!wp->w_floating) {
+      assert(unflat_altfr != NULL);
       // win_split_ins doesn't change sizes or layout if it fails to insert an
       // existing window, so just undo winframe_remove.
       winframe_restore(wp, dir, unflat_altfr);
@@ -4936,7 +4932,7 @@ static void win_enter_ext(win_T *const wp, const int flags)
     win_fix_cursor(get_real_state() & (MODE_NORMAL|MODE_CMDLINE|MODE_TERMINAL));
   }
 
-  fix_current_dir();
+  win_fix_current_dir();
 
   entering_window(curwin);
   // Careful: autocommands may close the window and make "wp" invalid
@@ -4989,7 +4985,7 @@ static void win_enter_ext(win_T *const wp, const int flags)
 }
 
 /// Used after making another window the current one: change directory if needed.
-void fix_current_dir(void)
+void win_fix_current_dir(void)
 {
   // New directory is either the local directory of the window, tab or NULL.
   char *new_dir = curwin->w_localdir ? curwin->w_localdir : curtab->tp_localdir;
