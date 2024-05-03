@@ -165,6 +165,7 @@ execute 'syn region asciidocAttributeList matchgroup=asciidocSymbol start="^\zs\
 syn region asciidocMacroAttributes matchgroup=asciidocRefMacro start=/\\\@<!<<"\{-}\(\w\|-\|_\|:\|\.\)\+"\?,\?/ end=/\(>>\)\|^$/ contains=asciidocQuoted.* keepend
 syn region asciidocMacroAttributes matchgroup=asciidocAnchorMacro start=/\\\@<!\[\{2}\(\w\|-\|_\|:\|\.\)\+,\?/ end=/\]\{2}/ keepend
 syn region asciidocMacroAttributes matchgroup=asciidocAnchorMacro start=/\\\@<!\[\{3}\(\w\|-\|_\|:\|\.\)\+/ end=/\]\{3}/ keepend
+execute 'syn region asciidocMacroAttributes matchgroup=asciidocSymbol start="<<\ze\S" end="\S\zs>>" keepend contains=@Spell,asciidocEntityRef' . s:oneline . s:concealends
 execute 'syn region asciidocMacroAttributes matchgroup=asciidocSymbol  start=/[\\0-9a-zA-Z]\@<!\w\(\w\|-\)*:\{1,2}\S\{-}\[/ skip=/\\\]/ end=/\]\|^$/ keepend contains=@Spell,asciidocEntityRef' . s:oneline . s:concealends
 " Highlight macro that starts with an attribute reference (a common idiom).
 syn region asciidocMacroAttributes matchgroup=asciidocMacro start=/\(\\\@<!{\w\(\w\|[-,+]\)*\([=!@#$%?:].*\)\?}\)\@<=\S\{-}\[/ skip=/\\\]/ end=/\]\|^$/ contains=asciidocQuoted.*,asciidocAttributeRef keepend
