@@ -4,7 +4,7 @@ local fn = vim.fn
 local M = {}
 
 --- @alias vim.filetype.mapfn fun(path:string,bufnr:integer, ...):string?, fun(b:integer)?
---- @alias vim.filetype.maptbl {[1]:string|vim.filetype.mapfn, [2]:{priority:integer}}
+--- @alias vim.filetype.maptbl [string|vim.filetype.mapfn, {priority:integer}]
 --- @alias vim.filetype.mapping.value string|vim.filetype.mapfn|vim.filetype.maptbl
 --- @alias vim.filetype.mapping table<string,vim.filetype.mapping.value>
 
@@ -14,7 +14,8 @@ local M = {}
 local function starsetf(ft, opts)
   return {
     function(path, bufnr)
-      local f = type(ft) == 'function' and ft(path, bufnr) or ft
+      -- Note: when `ft` is a function its return value may be nil.
+      local f = type(ft) ~= 'function' and ft or ft(path, bufnr)
       if not vim.g.ft_ignore_pat then
         return f
       end
@@ -247,6 +248,8 @@ local extension = {
   bzl = 'bzl',
   bazel = 'bzl',
   BUILD = 'bzl',
+  mdh = 'c',
+  epro = 'c',
   qc = 'c',
   cabal = 'cabal',
   cairo = 'cairo',
@@ -544,6 +547,7 @@ local extension = {
   inf = 'inform',
   INF = 'inform',
   ii = 'initng',
+  inko = 'inko',
   inp = detect.inp,
   ms = detect_seq(detect.nroff, 'xmath'),
   iss = 'iss',
@@ -568,6 +572,7 @@ local extension = {
   jsx = 'javascriptreact',
   clp = 'jess',
   jgr = 'jgraph',
+  jjdescription = 'jj',
   j73 = 'jovial',
   jov = 'jovial',
   jovial = 'jovial',
@@ -840,6 +845,7 @@ local extension = {
   psf = 'psf',
   psl = 'psl',
   pug = 'pug',
+  purs = 'purescript',
   arr = 'pyret',
   pxd = 'pyrex',
   pyx = 'pyrex',
@@ -867,6 +873,7 @@ local extension = {
   t6 = 'raku',
   p6 = 'raku',
   raml = 'raml',
+  rasi = 'rasi',
   rbs = 'rbs',
   rego = 'rego',
   rem = 'remind',
@@ -942,11 +949,13 @@ local extension = {
   sexp = 'sexplib',
   bash = detect.bash,
   bats = detect.bash,
+  cygport = detect.bash,
   ebuild = detect.bash,
   eclass = detect.bash,
   env = detect.sh,
   ksh = detect.ksh,
   sh = detect.sh,
+  mdd = 'sh',
   sieve = 'sieve',
   siv = 'sieve',
   sig = detect.sig,
@@ -964,6 +973,7 @@ local extension = {
   cdf = 'skill',
   sl = 'slang',
   ice = 'slice',
+  slint = 'slint',
   score = 'slrnsc',
   sol = 'solidity',
   smali = 'smali',
@@ -1014,6 +1024,8 @@ local extension = {
   mata = 'stata',
   ado = 'stata',
   stp = 'stp',
+  styl = 'stylus',
+  stylus = 'stylus',
   quark = 'supercollider',
   sface = 'surface',
   svelte = 'svelte',
@@ -1036,6 +1048,7 @@ local extension = {
   tk = 'tcl',
   jacl = 'tcl',
   tl = 'teal',
+  templ = 'templ',
   tmpl = 'template',
   ti = 'terminfo',
   dtx = 'tex',
@@ -1046,7 +1059,6 @@ local extension = {
   pgf = 'tex',
   nlo = 'tex',
   nls = 'tex',
-  out = 'tex',
   thm = 'tex',
   eps_tex = 'tex',
   pygtex = 'tex',
@@ -1298,6 +1310,7 @@ local filename = {
   ['init.trans'] = 'clojure',
   ['.trans'] = 'clojure',
   ['CMakeLists.txt'] = 'cmake',
+  ['CMakeCache.txt'] = 'cmakecache',
   ['.cling_history'] = 'cpp',
   ['.alias'] = detect.csh,
   ['.cshrc'] = detect.csh,
@@ -1311,6 +1324,7 @@ local filename = {
   ['.chktexrc'] = 'conf',
   ['.ripgreprc'] = 'conf',
   ripgreprc = 'conf',
+  ['.mbsyncrc'] = 'conf',
   ['configure.in'] = 'config',
   ['configure.ac'] = 'config',
   crontab = 'crontab',
@@ -1352,6 +1366,7 @@ local filename = {
   ['.wakatime.cfg'] = 'dosini',
   ['nfs.conf'] = 'dosini',
   ['nfsmount.conf'] = 'dosini',
+  ['.notmuch-config'] = 'dosini',
   ['pacman.conf'] = 'confini',
   ['paru.conf'] = 'confini',
   ['mpv.conf'] = 'confini',
@@ -1420,6 +1435,10 @@ local filename = {
   ['/etc/host.conf'] = 'hostconf',
   ['/etc/hosts.allow'] = 'hostsaccess',
   ['/etc/hosts.deny'] = 'hostsaccess',
+  ['hyprland.conf'] = 'hyprlang',
+  ['hyprpaper.conf'] = 'hyprlang',
+  ['hypridle.conf'] = 'hyprlang',
+  ['hyprlock.conf'] = 'hyprlang',
   ['/.icewm/menu'] = 'icemenu',
   ['.indent.pro'] = 'indent',
   indentrc = 'indent',
@@ -1432,13 +1451,17 @@ local filename = {
   ['.firebaserc'] = 'json',
   ['.prettierrc'] = 'json',
   ['.stylelintrc'] = 'json',
+  ['.lintstagedrc'] = 'json',
+  ['flake.lock'] = 'json',
   ['.babelrc'] = 'jsonc',
   ['.eslintrc'] = 'jsonc',
   ['.hintrc'] = 'jsonc',
+  ['.jscsrc'] = 'jsonc',
   ['.jsfmtrc'] = 'jsonc',
   ['.jshintrc'] = 'jsonc',
   ['.luaurc'] = 'jsonc',
   ['.swrc'] = 'jsonc',
+  ['.vsconfig'] = 'jsonc',
   ['.justfile'] = 'just',
   Kconfig = 'kconfig',
   ['Kconfig.debug'] = 'kconfig',
@@ -1473,6 +1496,7 @@ local filename = {
   ['/etc/mail/aliases'] = 'mailaliases',
   mailcap = 'mailcap',
   ['.mailcap'] = 'mailcap',
+  Kbuild = 'make',
   ['/etc/man.conf'] = 'manconf',
   ['man.config'] = 'manconf',
   ['maxima-init.mac'] = 'maxima',
@@ -1486,6 +1510,7 @@ local filename = {
   ['mplayer.conf'] = 'mplayerconf',
   mrxvtrc = 'mrxvtrc',
   ['.mrxvtrc'] = 'mrxvtrc',
+  ['.msmtprc'] = 'msmtp',
   ['.mysql_history'] = 'mysql',
   ['/etc/nanorc'] = 'nanorc',
   Neomuttrc = 'neomuttrc',
@@ -1495,6 +1520,7 @@ local filename = {
   ['.octaverc'] = 'octave',
   octaverc = 'octave',
   ['octave.conf'] = 'octave',
+  ['.ondirrc'] = 'ondir',
   opam = 'opam',
   ['pacman.log'] = 'pacmanlog',
   ['/etc/pam.conf'] = 'pamconf',
@@ -1553,6 +1579,8 @@ local filename = {
   ['.inputrc'] = 'readline',
   ['.reminders'] = 'remind',
   ['requirements.txt'] = 'requirements',
+  ['constraints.txt'] = 'requirements',
+  ['requirements.in'] = 'requirements',
   ['resolv.conf'] = 'resolv',
   ['robots.txt'] = 'robots',
   Gemfile = 'ruby',
@@ -1611,7 +1639,7 @@ local filename = {
   ['.xsdbcmdhistory'] = 'tcl',
   ['texmf.cnf'] = 'texmf',
   COPYING = 'text',
-  README = 'text',
+  README = detect_seq(detect.haredoc, 'text'),
   LICENSE = 'text',
   AUTHORS = 'text',
   tfrc = 'tf',
@@ -1720,9 +1748,8 @@ local pattern = {
   ['.*%.blade%.php'] = 'blade',
   ['bzr_log%..*'] = 'bzr',
   ['.*enlightenment/.*%.cfg'] = 'c',
-  ['${HOME}/cabal%.config'] = 'cabalconfig',
-  ['${HOME}/%.config/cabal/config'] = 'cabalconfig',
-  ['${XDG_CONFIG_HOME}/cabal/config'] = 'cabalconfig',
+  ['.*/%.cabal/config'] = 'cabalconfig',
+  ['.*/cabal/config'] = 'cabalconfig',
   ['cabal%.project%..*'] = starsetf('cabalproject'),
   ['.*/%.calendar/.*'] = starsetf('calendar'),
   ['.*/share/calendar/.*/calendar%..*'] = starsetf('calendar'),
@@ -2047,6 +2074,9 @@ local pattern = {
   ['.*/queries/.*%.scm'] = 'query', -- treesitter queries (Neovim only)
   ['.*,v'] = 'rcs',
   ['%.reminders.*'] = starsetf('remind'),
+  ['.*%-requirements%.txt'] = 'requirements',
+  ['requirements/.*%.txt'] = 'requirements',
+  ['requires/.*%.txt'] = 'requirements',
   ['[rR]akefile.*'] = starsetf('ruby'),
   ['[rR]antfile'] = 'ruby',
   ['[rR]akefile'] = 'ruby',
@@ -2128,6 +2158,7 @@ local pattern = {
   ['.*/%.init/.*%.conf'] = 'upstart',
   ['.*/usr/share/upstart/.*%.override'] = 'upstart',
   ['.*%.[Ll][Oo][Gg]'] = detect.log,
+  ['.*/etc/config/.*'] = starsetf(detect.uci),
   ['.*%.vhdl_[0-9].*'] = starsetf('vhdl'),
   ['.*%.ws[fc]'] = 'wsh',
   ['.*/Xresources/.*'] = starsetf('xdefaults'),
@@ -2290,7 +2321,6 @@ end
 --- vim.filetype.add {
 ---   pattern = {
 ---     ['.*'] = {
----       priority = -math.huge,
 ---       function(path, bufnr)
 ---         local content = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ''
 ---         if vim.regex([[^#!.*\\<mine\\>]]):match_str(content) ~= nil then
@@ -2299,6 +2329,7 @@ end
 ---           return 'drawing'
 ---         end
 ---       end,
+---       { priority = -math.huge },
 ---     },
 ---   },
 --- }

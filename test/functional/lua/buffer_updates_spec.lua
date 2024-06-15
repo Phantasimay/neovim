@@ -1,15 +1,16 @@
 -- Test suite for testing interactions with API bindings
-local t = require('test.functional.testutil')()
+local t = require('test.testutil')
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
 
-local command = t.command
-local api = t.api
-local fn = t.fn
-local clear = t.clear
+local command = n.command
+local api = n.api
+local fn = n.fn
+local clear = n.clear
 local eq = t.eq
 local fail = t.fail
-local exec_lua = t.exec_lua
-local feed = t.feed
+local exec_lua = n.exec_lua
+local feed = n.feed
 local expect_events = t.expect_events
 local write_file = t.write_file
 local dedent = t.dedent
@@ -292,11 +293,11 @@ describe('lua buffer event callbacks: on_lines', function()
 
     exec_lua(code)
     command('q!')
-    t.assert_alive()
+    n.assert_alive()
 
     exec_lua(code)
     command('bd!')
-    t.assert_alive()
+    n.assert_alive()
   end)
 
   it('#12718 lnume', function()
@@ -377,6 +378,25 @@ describe('lua buffer event callbacks: on_lines', function()
         {5:-- INSERT --}                            |
       ]],
     })
+  end)
+
+  it('line lengths are correct when pressing TAB with folding #29119', function()
+    api.nvim_buf_set_lines(0, 0, -1, true, { 'a', 'b' })
+
+    exec_lua([[
+      _G.res = {}
+      vim.o.foldmethod = 'indent'
+      vim.o.softtabstop = -1
+      vim.api.nvim_buf_attach(0, false, {
+        on_lines = function(_, bufnr, _, row, _, end_row)
+          local lines = vim.api.nvim_buf_get_lines(bufnr, row, end_row, true)
+          table.insert(_G.res, lines)
+        end
+      })
+    ]])
+
+    feed('i<Tab>')
+    eq({ '\ta' }, exec_lua('return _G.res[#_G.res]'))
   end)
 end)
 
@@ -965,7 +985,7 @@ describe('lua: nvim_buf_attach on_bytes', function()
       command('e! Xtest-undofile')
       command('set undodir=. | set undofile')
 
-      local ns = t.request('nvim_create_namespace', 'ns1')
+      local ns = n.request('nvim_create_namespace', 'ns1')
       api.nvim_buf_set_extmark(0, ns, 0, 0, {})
 
       eq({ '12345', 'hello world' }, api.nvim_buf_get_lines(0, 0, -1, true))

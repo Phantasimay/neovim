@@ -1,12 +1,13 @@
 -- To test tui/input.c, this module spawns `nvim` inside :terminal and sends
 -- bytes via jobsend().  Note: the functional/testutil.lua test-session methods
 -- operate on the _host_ session, _not_ the child session.
-local t = require('test.functional.testutil')()
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
-local testprg = t.testprg
-local exec_lua = t.exec_lua
-local api = t.api
-local nvim_prog = t.nvim_prog
+
+local testprg = n.testprg
+local exec_lua = n.exec_lua
+local api = n.api
+local nvim_prog = n.nvim_prog
 
 local function feed_data(data)
   if type(data) == 'table' then
@@ -91,6 +92,8 @@ local function screen_setup(extra_rows, command, cols, env, screen_opts)
 
   api.nvim_command('highlight TermCursor cterm=reverse')
   api.nvim_command('highlight TermCursorNC ctermbg=11')
+  api.nvim_command('highlight StatusLineTerm ctermbg=2 ctermfg=0')
+  api.nvim_command('highlight StatusLineTermNC ctermbg=2 ctermfg=8')
 
   local screen = Screen.new(cols, 7 + extra_rows)
   screen:set_default_attr_ids({
@@ -110,6 +113,8 @@ local function screen_setup(extra_rows, command, cols, env, screen_opts)
     [14] = { underline = true, reverse = true, bold = true },
     [15] = { underline = true, foreground = 12 },
     [16] = { background = 248, foreground = 0 }, -- Visual in :terminal session
+    [17] = { background = 2, foreground = 0 }, -- StatusLineTerm
+    [18] = { background = 2, foreground = 8 }, -- StatusLineTermNC
   })
 
   screen:attach(screen_opts or { rgb = false })

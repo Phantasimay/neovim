@@ -1,17 +1,18 @@
-local t = require('test.functional.testutil')()
+local t = require('test.testutil')
+local n = require('test.functional.testnvim')()
 
-local clear = t.clear
+local clear = n.clear
 local eq = t.eq
-local eval = t.eval
-local exec = t.exec
-local exec_lua = t.exec_lua
-local expect = t.expect
-local feed = t.feed
-local fn = t.fn
-local api = t.api
-local source = t.source
-local command = t.command
-local exec_capture = t.exec_capture
+local eval = n.eval
+local exec = n.exec
+local exec_lua = n.exec_lua
+local expect = n.expect
+local feed = n.feed
+local fn = n.fn
+local api = n.api
+local source = n.source
+local command = n.command
+local exec_capture = n.exec_capture
 local pcall_err = t.pcall_err
 
 describe('maparg()', function()
@@ -233,7 +234,9 @@ describe('mapset()', function()
       0,
       exec_lua([[
       GlobalCount = 0
-      vim.api.nvim_set_keymap('n', 'asdf', '', {callback = function() GlobalCount = GlobalCount + 1 end })
+      vim.api.nvim_set_keymap('n', 'asdf', '', {
+        callback = function() GlobalCount = GlobalCount + 1 end,
+      })
       return GlobalCount
     ]])
     )
@@ -242,7 +245,9 @@ describe('mapset()', function()
 
     exec_lua([[
       _G.saved_asdf_map = vim.fn.maparg('asdf', 'n', false, true)
-      vim.api.nvim_set_keymap('n', 'asdf', '', {callback = function() GlobalCount = GlobalCount + 10 end })
+      vim.api.nvim_set_keymap('n', 'asdf', '', {
+        callback = function() GlobalCount = GlobalCount + 10 end,
+      })
     ]])
     feed('asdf')
     eq(11, exec_lua([[return GlobalCount]]))
@@ -253,7 +258,10 @@ describe('mapset()', function()
 
     exec([[
       let g:saved_asdf_map = maparg('asdf', 'n', v:false, v:true)
-      lua vim.api.nvim_set_keymap('n', 'asdf', '', {callback = function() GlobalCount = GlobalCount + 10 end })
+      lua <<
+      vim.api.nvim_set_keymap('n', 'asdf', '', {
+        callback = function() GlobalCount = GlobalCount + 10 end,
+      })
     ]])
     feed('asdf')
     eq(22, exec_lua([[return GlobalCount]]))

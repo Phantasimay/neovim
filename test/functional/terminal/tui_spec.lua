@@ -4,31 +4,33 @@
 -- "bracketed paste" terminal feature:
 -- http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Bracketed-Paste-Mode
 
-local t = require('test.functional.testutil')()
-local tt = require('test.functional.terminal.testutil')
+local t = require('test.testutil')
+local n = require('test.functional.testnvim')()
 local Screen = require('test.functional.ui.screen')
+local tt = require('test.functional.terminal.testutil')
+
 local eq = t.eq
 local feed_data = tt.feed_data
-local clear = t.clear
-local command = t.command
+local clear = n.clear
+local command = n.command
 local dedent = t.dedent
-local exec = t.exec
-local exec_lua = t.exec_lua
-local testprg = t.testprg
+local exec = n.exec
+local exec_lua = n.exec_lua
+local testprg = n.testprg
 local retry = t.retry
-local nvim_prog = t.nvim_prog
-local nvim_set = t.nvim_set
+local nvim_prog = n.nvim_prog
+local nvim_set = n.nvim_set
 local ok = t.ok
 local read_file = t.read_file
-local fn = t.fn
-local api = t.api
+local fn = n.fn
+local api = n.api
 local is_ci = t.is_ci
 local is_os = t.is_os
-local new_pipename = t.new_pipename
-local spawn_argv = t.spawn_argv
-local set_session = t.set_session
+local new_pipename = n.new_pipename
+local spawn_argv = n.spawn_argv
+local set_session = n.set_session
 local write_file = t.write_file
-local eval = t.eval
+local eval = n.eval
 local assert_log = t.assert_log
 
 local testlog = 'Xtest-tui-log'
@@ -64,7 +66,7 @@ describe('TUI', function()
                                                         |
       {3:-- TERMINAL --}                                    |
     ]])
-    child_session = t.connect(child_server)
+    child_session = n.connect(child_server)
     child_exec_lua = tt.make_lua_executor(child_session)
   end)
 
@@ -1054,6 +1056,11 @@ describe('TUI', function()
     if is_ci('github') then
       pending('tty-test complains about not owning the terminal -- actions/runner#241')
     end
+    screen:set_default_attr_ids({
+      [1] = { reverse = true }, -- focused cursor
+      [3] = { bold = true },
+      [19] = { bold = true, background = 121, foreground = 0 }, -- StatusLineTerm
+    })
     child_exec_lua('vim.o.statusline="^^^^^^^"')
     child_exec_lua('vim.cmd.terminal(...)', testprg('tty-test'))
     feed_data('i')
@@ -1061,7 +1068,7 @@ describe('TUI', function()
       tty ready                                         |
       {1: }                                                 |
                                                         |*2
-      {5:^^^^^^^                                           }|
+      {19:^^^^^^^                                           }|
       {3:-- TERMINAL --}                                    |*2
     ]])
     feed_data('\027[200~')
@@ -1071,7 +1078,7 @@ describe('TUI', function()
       tty ready                                         |
       hallo{1: }                                            |
                                                         |*2
-      {5:^^^^^^^                                           }|
+      {19:^^^^^^^                                           }|
       {3:-- TERMINAL --}                                    |*2
     ]])
   end)
@@ -1546,10 +1553,32 @@ describe('TUI', function()
     screen:set_rgb_cterm(true)
     screen:set_default_attr_ids({
       [1] = { { reverse = true }, { reverse = true } },
-      [2] = { { bold = true, reverse = true }, { bold = true, reverse = true } },
+      [2] = {
+        { bold = true, background = Screen.colors.LightGreen, foreground = Screen.colors.Black },
+        { bold = true },
+      },
       [3] = { { bold = true }, { bold = true } },
       [4] = { { fg_indexed = true, foreground = tonumber('0xe0e000') }, { foreground = 3 } },
       [5] = { { foreground = tonumber('0xff8000') }, {} },
+      [6] = {
+        {
+          fg_indexed = true,
+          bg_indexed = true,
+          bold = true,
+          background = tonumber('0x66ff99'),
+          foreground = Screen.colors.Black,
+        },
+        { bold = true, background = 121, foreground = 0 },
+      },
+      [7] = {
+        {
+          fg_indexed = true,
+          bg_indexed = true,
+          background = tonumber('0x66ff99'),
+          foreground = Screen.colors.Black,
+        },
+        { background = 121, foreground = 0 },
+      },
     })
 
     child_exec_lua('vim.o.statusline="^^^^^^^"')
@@ -1584,7 +1613,7 @@ describe('TUI', function()
       {1:t}ty ready                                         |
       {4:text}colortext                                     |
                                                         |*2
-      {2:^^^^^^^                                           }|
+      {6:^^^^^^^}{7:                                           }|
       :set notermguicolors                              |
       {3:-- TERMINAL --}                                    |
     ]],
@@ -1971,6 +2000,7 @@ describe('TUI', function()
       [3] = { bold = true },
       [4] = { foreground = tonumber('0x4040ff'), fg_indexed = true },
       [5] = { bold = true, reverse = true },
+      [6] = { foreground = Screen.colors.White, background = Screen.colors.DarkGreen },
     })
     screen:attach()
     fn.termopen({
@@ -1996,10 +2026,44 @@ describe('TUI', function()
       {2:~                        }│{4:~                       }|*5
       {2:~                        }│{5:[No Name]   0,0-1    All}|
       {2:~                        }│                        |
-      {5:new                       }{1:{MATCH:<.*[/\]nvim }}|
+      {5:new                       }{6:{MATCH:<.*[/\]nvim }}|
                                                         |
     ]])
   end)
+
+  -- #28667, #28668
+  for _, guicolors in ipairs({ 'notermguicolors', 'termguicolors' }) do
+    it('has no black flicker when clearing regions during startup with ' .. guicolors, function()
+      local screen = Screen.new(50, 10)
+      screen:attach()
+      fn.termopen({
+        nvim_prog,
+        '--clean',
+        '--cmd',
+        'set ' .. guicolors,
+        '--cmd',
+        'sleep 10',
+      }, {
+        env = {
+          VIMRUNTIME = os.getenv('VIMRUNTIME'),
+        },
+      })
+      screen:expect({
+        grid = [[
+          ^                                                  |
+                                                            |*9
+        ]],
+        intermediate = true,
+      })
+      screen:try_resize(51, 11)
+      screen:expect({
+        grid = [[
+          ^                                                   |
+                                                             |*10
+        ]],
+      })
+    end)
+  end
 
   it('argv[0] can be overridden #23953', function()
     if not exec_lua('return pcall(require, "ffi")') then
@@ -2248,7 +2312,7 @@ describe('TUI FocusGained/FocusLost', function()
                                                         |
       {3:-- TERMINAL --}                                    |
     ]])
-    child_session = t.connect(child_server)
+    child_session = n.connect(child_server)
     child_session:request(
       'nvim_exec2',
       [[
@@ -2891,7 +2955,7 @@ describe('TUI', function()
 
     screen:expect({ any = '%[No Name%]' })
 
-    local child_session = t.connect(child_server)
+    local child_session = n.connect(child_server)
     retry(nil, 1000, function()
       eq({
         Tc = true,
@@ -2900,6 +2964,61 @@ describe('TUI', function()
         setrgbb = true,
       }, eval("get(g:, 'xtgettcap', '')"))
       eq({ true, 1 }, { child_session:request('nvim_eval', '&termguicolors') })
+    end)
+  end)
+
+  it('does not query the terminal for truecolor support if $COLORTERM is set', function()
+    clear()
+    exec_lua([[
+      vim.api.nvim_create_autocmd('TermRequest', {
+        callback = function(args)
+          local req = args.data
+          vim.g.termrequest = req
+          local xtgettcap = req:match('^\027P%+q([%x;]+)$')
+          if xtgettcap then
+            local t = {}
+            for cap in vim.gsplit(xtgettcap, ';') do
+              local resp = string.format('\027P1+r%s\027\\', xtgettcap)
+              vim.api.nvim_chan_send(vim.bo[args.buf].channel, resp)
+              t[vim.text.hexdecode(cap)] = true
+            end
+            vim.g.xtgettcap = t
+            return true
+          elseif req:match('^\027P$qm\027\\$') then
+            vim.g.decrqss = true
+          end
+        end,
+      })
+    ]])
+
+    local child_server = new_pipename()
+    screen = tt.setup_child_nvim({
+      '--listen',
+      child_server,
+      '-u',
+      'NONE',
+      '-i',
+      'NONE',
+    }, {
+      env = {
+        VIMRUNTIME = os.getenv('VIMRUNTIME'),
+        -- With COLORTERM=256, Nvim should not query the terminal and should not set 'tgc'
+        COLORTERM = '256',
+        TERM = 'xterm-256colors',
+      },
+    })
+
+    screen:expect({ any = '%[No Name%]' })
+
+    local child_session = n.connect(child_server)
+    retry(nil, 1000, function()
+      local xtgettcap = eval("get(g:, 'xtgettcap', {})")
+      eq(nil, xtgettcap['Tc'])
+      eq(nil, xtgettcap['RGB'])
+      eq(nil, xtgettcap['setrgbf'])
+      eq(nil, xtgettcap['setrgbb'])
+      eq(0, eval([[get(g:, 'decrqss')]]))
+      eq({ true, 0 }, { child_session:request('nvim_eval', '&termguicolors') })
     end)
   end)
 
@@ -2937,7 +3056,7 @@ describe('TUI', function()
 
     screen:expect({ any = '%[No Name%]' })
 
-    local child_session = t.connect(child_server)
+    local child_session = n.connect(child_server)
     retry(nil, 1000, function()
       eq('Ms', eval("get(g:, 'xtgettcap', '')"))
       eq({ true, 'OSC 52' }, { child_session:request('nvim_eval', 'g:clipboard.name') })
@@ -2965,7 +3084,7 @@ describe('TUI bg color', function()
       'set noswapfile',
     })
     screen:expect({ any = '%[No Name%]' })
-    local child_session = t.connect(child_server)
+    local child_session = n.connect(child_server)
     retry(nil, nil, function()
       eq({ true, 'dark' }, { child_session:request('nvim_eval', '&background') })
     end)
@@ -2988,7 +3107,7 @@ describe('TUI bg color', function()
       'set noswapfile',
     })
     screen:expect({ any = '%[No Name%]' })
-    local child_session = t.connect(child_server)
+    local child_session = n.connect(child_server)
     retry(nil, nil, function()
       eq({ true, 'light' }, { child_session:request('nvim_eval', '&background') })
     end)

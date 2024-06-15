@@ -13,6 +13,7 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/cursor.h"
 #include "nvim/drawscreen.h"
+#include "nvim/errors.h"
 #include "nvim/eval/window.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/gettext_defs.h"
@@ -148,7 +149,7 @@ void nvim_win_set_cursor(Window window, ArrayOf(Integer, 2) pos, Error *err)
   switchwin_T switchwin;
   switch_win(&switchwin, win, NULL, true);
   update_topline(curwin);
-  setcursor_mayforce(true);
+  validate_cursor(curwin);
   restore_win(&switchwin, true);
 
   redraw_later(win, UPD_VALID);

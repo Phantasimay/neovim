@@ -17,6 +17,7 @@
 #include "nvim/decoration.h"
 #include "nvim/decoration_defs.h"
 #include "nvim/drawscreen.h"
+#include "nvim/errors.h"
 #include "nvim/eval/window.h"
 #include "nvim/extmark_defs.h"
 #include "nvim/globals.h"
@@ -189,13 +190,13 @@
 ///     ```
 ///   - title: Title (optional) in window border, string or list.
 ///     List should consist of `[text, highlight]` tuples.
-///     If string, the default highlight group is `FloatTitle`.
+///     If string, or a tuple lacks a highlight, the default highlight group is `FloatTitle`.
 ///   - title_pos: Title position. Must be set with `title` option.
 ///     Value can be one of "left", "center", or "right".
 ///     Default is `"left"`.
 ///   - footer: Footer (optional) in window border, string or list.
 ///     List should consist of `[text, highlight]` tuples.
-///     If string, the default highlight group is `FloatFooter`.
+///     If string, or a tuple lacks a highlight, the default highlight group is `FloatFooter`.
 ///   - footer_pos: Footer position. Must be set with `footer` option.
 ///     Value can be one of "left", "center", or "right".
 ///     Default is `"left"`.
@@ -224,7 +225,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
   }
 
   WinConfig fconfig = WIN_CONFIG_INIT;
-  if (!parse_float_config(NULL, config, &fconfig, false, err)) {
+  if (!parse_win_config(NULL, config, &fconfig, false, err)) {
     return 0;
   }
 
@@ -236,19 +237,19 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
 
   win_T *wp = NULL;
   tabpage_T *tp = curtab;
-  if (is_split) {
-    win_T *parent = NULL;
-    if (config->win != -1) {
-      parent = find_window_by_handle(fconfig.window, err);
-      if (!parent) {
-        // find_window_by_handle has already set the error
-        goto cleanup;
-      } else if (parent->w_floating) {
-        api_set_error(err, kErrorTypeException, "Cannot split a floating window");
-        goto cleanup;
-      }
+  win_T *parent = NULL;
+  if (config->win != -1) {
+    parent = find_window_by_handle(fconfig.window, err);
+    if (!parent) {
+      // find_window_by_handle has already set the error
+      goto cleanup;
+    } else if (is_split && parent->w_floating) {
+      api_set_error(err, kErrorTypeException, "Cannot split a floating window");
+      goto cleanup;
     }
-
+    tp = win_find_tabpage(parent);
+  }
+  if (is_split) {
     if (!check_split_disallowed_err(parent ? parent : curwin, err)) {
       goto cleanup;  // error already set
     }
@@ -263,16 +264,16 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     int flags = win_split_flags(fconfig.split, parent == NULL) | WSP_NOENTER;
 
     TRY_WRAP(err, {
+      int size = (flags & WSP_VERT) ? fconfig.width : fconfig.height;
       if (parent == NULL || parent == curwin) {
-        wp = win_split_ins(0, flags, NULL, 0, NULL);
+        wp = win_split_ins(size, flags, NULL, 0, NULL);
       } else {
-        tp = win_find_tabpage(parent);
         switchwin_T switchwin;
         // `parent` is valid in `tp`, so switch_win should not fail.
         const int result = switch_win(&switchwin, parent, tp, true);
         assert(result == OK);
         (void)result;
-        wp = win_split_ins(0, flags, NULL, 0, NULL);
+        wp = win_split_ins(size, flags, NULL, 0, NULL);
         restore_win(&switchwin, true);
       }
     });
@@ -394,6 +395,7 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
   if (!win) {
     return;
   }
+
   tabpage_T *win_tp = win_find_tabpage(win);
   bool was_split = !win->w_floating;
   bool has_split = HAS_KEY_X(config, split);
@@ -405,8 +407,24 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
                   && !(HAS_KEY_X(config, external) ? config->external : fconfig.external)
                   && (has_split || has_vertical || was_split);
 
-  if (!parse_float_config(win, config, &fconfig, !was_split || to_split, err)) {
+  if (!parse_win_config(win, config, &fconfig, !was_split || to_split, err)) {
     return;
+  }
+  win_T *parent = NULL;
+  if (config->win != -1) {
+    parent = find_window_by_handle(fconfig.window, err);
+    if (!parent) {
+      return;
+    } else if (to_split && parent->w_floating) {
+      api_set_error(err, kErrorTypeException, "Cannot split a floating window");
+      return;
+    }
+
+    // Prevent autocmd window from being moved into another tabpage
+    if (is_aucmd_win(win) && win_find_tabpage(win) != win_find_tabpage(parent)) {
+      api_set_error(err, kErrorTypeException, "Cannot move autocmd win to another tabpage");
+      return;
+    }
   }
   if (was_split && !to_split) {
     if (!win_new_float(win, false, fconfig, err)) {
@@ -414,17 +432,6 @@ void nvim_win_set_config(Window window, Dict(win_config) *config, Error *err)
     }
     redraw_later(win, UPD_NOT_VALID);
   } else if (to_split) {
-    win_T *parent = NULL;
-    if (config->win != -1) {
-      parent = find_window_by_handle(fconfig.window, err);
-      if (!parent) {
-        return;
-      } else if (parent->w_floating) {
-        api_set_error(err, kErrorTypeException, "Cannot split a floating window");
-        return;
-      }
-    }
-
     WinSplit old_split = win_split_dir(win);
     if (has_vertical && !has_split) {
       if (config->vertical) {
@@ -845,7 +852,6 @@ static void parse_bordertext(Object bordertext, BorderTextType bordertext_type, 
   bool *is_present;
   VirtText *chunks;
   int *width;
-  int default_hl_id;
   switch (bordertext_type) {
   case kBorderTextTitle:
     if (fconfig->title) {
@@ -855,7 +861,6 @@ static void parse_bordertext(Object bordertext, BorderTextType bordertext_type, 
     is_present = &fconfig->title;
     chunks = &fconfig->title_chunks;
     width = &fconfig->title_width;
-    default_hl_id = syn_check_group(S_LEN("FloatTitle"));
     break;
   case kBorderTextFooter:
     if (fconfig->footer) {
@@ -865,7 +870,6 @@ static void parse_bordertext(Object bordertext, BorderTextType bordertext_type, 
     is_present = &fconfig->footer;
     chunks = &fconfig->footer_chunks;
     width = &fconfig->footer_width;
-    default_hl_id = syn_check_group(S_LEN("FloatFooter"));
     break;
   }
 
@@ -875,7 +879,7 @@ static void parse_bordertext(Object bordertext, BorderTextType bordertext_type, 
       return;
     }
     kv_push(*chunks, ((VirtTextChunk){ .text = xstrdup(bordertext.data.string.data),
-                                       .hl_id = default_hl_id }));
+                                       .hl_id = -1 }));
     *width = (int)mb_string2cells(bordertext.data.string.data);
     *is_present = true;
     return;
@@ -1043,8 +1047,8 @@ static void generate_api_error(win_T *wp, const char *attribute, Error *err)
   }
 }
 
-static bool parse_float_config(win_T *wp, Dict(win_config) *config, WinConfig *fconfig, bool reconf,
-                               Error *err)
+static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fconfig, bool reconf,
+                             Error *err)
 {
 #define HAS_KEY_X(d, key) HAS_KEY(d, win_config, key)
   bool has_relative = false, relative_is_win = false, is_split = false;

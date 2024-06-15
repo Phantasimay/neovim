@@ -1,6 +1,8 @@
-local t = require('test.functional.testutil')()
-local clear = t.clear
-local exec_lua = t.exec_lua
+local t = require('test.testutil')
+local n = require('test.functional.testnvim')()
+
+local clear = n.clear
+local exec_lua = n.exec_lua
 local eq = t.eq
 local pcall_err = t.pcall_err
 local matches = t.matches
@@ -42,6 +44,7 @@ describe('vim.base64', function()
         ̦H̬̤̗̤͝e͜ ̜̥̝̻͍̟́w̕h̖̯͓o̝͙̖͎̱̮ ҉̺̙̞̟͈W̷̼̭a̺̪͍į͈͕̭͙̯̜t̶̼̮s̘͙͖̕ ̠̫̠B̻͍͙͉̳ͅe̵h̵̬͇̫͙i̹͓̳̳̮͎̫̕n͟d̴̪̜̖ ̰͉̩͇͙̲͞ͅT͖̼͓̪͢h͏͓̮̻e̬̝̟ͅ ̤̹̝W͙̞̝͔͇͝ͅa͏͓͔̹̼̣l̴͔̰̤̟͔ḽ̫.͕
         Z̮̞̠͙͔ͅḀ̗̞͈̻̗Ḷ͙͎̯̹̞͓G̻O̭̗̮
       ]],
+      'Hello\0world',
     }
 
     for _, v in ipairs(values) do

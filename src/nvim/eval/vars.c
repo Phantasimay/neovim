@@ -15,6 +15,7 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/charset.h"
 #include "nvim/drawscreen.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/encode.h"
 #include "nvim/eval/funcs.h"
@@ -88,7 +89,7 @@ char *eval_one_expr_in_str(char *p, garray_T *gap, bool evaluate)
   }
   if (evaluate) {
     *block_end = NUL;
-    char *expr_val = eval_to_string(block_start, true);
+    char *expr_val = eval_to_string(block_start, false);
     *block_end = '}';
     if (expr_val == NULL) {
       return NULL;

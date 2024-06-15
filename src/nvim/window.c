@@ -22,6 +22,7 @@
 #include "nvim/diff.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
+#include "nvim/errors.h"
 #include "nvim/eval.h"
 #include "nvim/eval/typval.h"
 #include "nvim/eval/typval_defs.h"
@@ -753,7 +754,19 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
   }
 
   try_start();
+
+  const int save_acd = p_acd;
+  if (!switchwin.sw_same_win) {
+    // Temporarily disable 'autochdir' when setting buffer in another window.
+    p_acd = false;
+  }
+
   int result = do_buffer(DOBUF_GOTO, DOBUF_FIRST, FORWARD, buf->b_fnum, 0);
+
+  if (!switchwin.sw_same_win) {
+    p_acd = save_acd;
+  }
+
   if (!try_end(err) && result == FAIL) {
     api_set_error(err,
                   kErrorTypeException,
@@ -815,7 +828,8 @@ void ui_ext_win_position(win_T *wp, bool validate)
         row += row_off;
         col += col_off;
         if (c.bufpos.lnum >= 0) {
-          pos_T pos = { c.bufpos.lnum + 1, c.bufpos.col, 0 };
+          int lnum = MIN(c.bufpos.lnum + 1, win->w_buffer->b_ml.ml_line_count);
+          pos_T pos = { lnum, c.bufpos.col, 0 };
           int trow, tcol, tcolc, tcole;
           textpos2screenpos(win, &pos, &trow, &tcol, &tcolc, &tcole, true);
           row += trow - 1;
@@ -2454,6 +2468,7 @@ void win_init_empty(win_T *wp)
   wp->w_topline = 1;
   wp->w_topfill = 0;
   wp->w_botline = 2;
+  wp->w_valid = 0;
   wp->w_s = &wp->w_buffer->b_s;
 }
 
@@ -2857,7 +2872,8 @@ int win_close(win_T *win, bool free_buf, bool force)
         if (wp == curwin) {
           break;
         }
-        if (!wp->w_p_pvw && !bt_quickfix(wp->w_buffer)) {
+        if (!wp->w_p_pvw && !bt_quickfix(wp->w_buffer)
+            && !(wp->w_floating && !wp->w_config.focusable)) {
           curwin = wp;
           break;
         }
@@ -5113,7 +5129,14 @@ win_T *win_alloc(win_T *after, bool hidden)
   block_autocmds();
   // link the window in the window list
   if (!hidden) {
-    win_append(after, new_wp, NULL);
+    tabpage_T *tp = NULL;
+    if (after) {
+      tp = win_find_tabpage(after);
+      if (tp == curtab) {
+        tp = NULL;
+      }
+    }
+    win_append(after, new_wp, tp);
   }
 
   new_wp->w_wincol = 0;
@@ -5887,10 +5910,6 @@ static void frame_setheight(frame_T *curfrp, int height)
 
   if (curfrp->fr_parent == NULL) {
     // topframe: can only change the command line height
-    // Avoid doing so with external messages.
-    if (ui_has(kUIMessages)) {
-      return;
-    }
     if (height > ROWS_AVAIL) {
       // If height is greater than the available space, try to create space for
       // the frame by reducing 'cmdheight' if possible, while making sure
@@ -6229,12 +6248,6 @@ const char *did_set_winminwidth(optset_T *args FUNC_ATTR_UNUSED)
 void win_drag_status_line(win_T *dragwin, int offset)
 {
   frame_T *fr = dragwin->w_frame;
-
-  // Avoid changing command line height with external messages.
-  if (fr->fr_next == NULL && ui_has(kUIMessages)) {
-    return;
-  }
-
   frame_T *curfr = fr;
   if (fr != topframe) {         // more than one window
     fr = fr->fr_parent;
