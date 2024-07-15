@@ -1500,6 +1500,8 @@ describe('API', function()
       eq('Dictionary is locked', pcall_err(request, 'nvim_set_vvar', 'nosuchvar', 42))
       api.nvim_set_vvar('errmsg', 'set by API')
       eq('set by API', api.nvim_get_vvar('errmsg'))
+      api.nvim_set_vvar('completed_item', { word = 'a', user_data = vim.empty_dict() })
+      eq({}, api.nvim_get_vvar('completed_item')['user_data'])
       api.nvim_set_vvar('errmsg', 42)
       eq('42', eval('v:errmsg'))
       api.nvim_set_vvar('oldfiles', { 'one', 'two' })
@@ -1571,9 +1573,9 @@ describe('API', function()
       eq(val2, request('vim_del_var', 'lua'))
     end)
 
-    it('truncates values with NULs in them', function()
+    it('preserves values with NULs in them', function()
       api.nvim_set_var('xxx', 'ab\0cd')
-      eq('ab', api.nvim_get_var('xxx'))
+      eq('ab\000cd', api.nvim_get_var('xxx'))
     end)
   end)
 
@@ -3887,11 +3889,11 @@ describe('API', function()
         ))
         eq(
           {
-            str = '3 ',
-            width = 2,
+            str = '       3 ',
+            width = 9,
             highlights = {
               { group = 'LineNr', start = 0 },
-              { group = 'ErrorMsg', start = 1 },
+              { group = 'ErrorMsg', start = 8 },
             },
           },
           api.nvim_eval_statusline('%l%#ErrorMsg# ', { use_statuscol_lnum = 3, highlights = true })

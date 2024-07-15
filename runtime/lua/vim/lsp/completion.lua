@@ -176,7 +176,7 @@ local function apply_defaults(item, defaults)
   if defaults.editRange then
     local textEdit = item.textEdit or {}
     item.textEdit = textEdit
-    textEdit.newText = textEdit.newText or item.textEditText or item.insertText
+    textEdit.newText = textEdit.newText or item.textEditText or item.insertText or item.label
     if defaults.editRange.start then
       textEdit.range = textEdit.range or defaults.editRange
     elseif defaults.editRange.insert then
@@ -235,14 +235,20 @@ function M._lsp_to_complete_items(result, prefix, client_id)
     return {}
   end
 
-  local matches = prefix == '' and function()
-    return true
-  end or function(item)
-    if item.filterText then
-      return next(vim.fn.matchfuzzy({ item.filterText }, prefix))
+  ---@type fun(item: lsp.CompletionItem):boolean
+  local matches
+  if prefix == '' then
+    matches = function(_)
+      return true
     end
-    return true
+  else
+    ---@param item lsp.CompletionItem
+    matches = function(item)
+      local text = item.filterText or item.label
+      return next(vim.fn.matchfuzzy({ text }, prefix)) ~= nil
+    end
   end
+
   local candidates = {}
   for _, item in ipairs(items) do
     if matches(item) then

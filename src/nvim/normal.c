@@ -1660,7 +1660,6 @@ size_t find_ident_at_pos(win_T *wp, linenr_T lnum, colnr_T startcol, char **text
     // When starting on a ']' count it, so that we include the '['.
     bn = ptr[col] == ']';
 
-    //
     // 2. Back up to start of identifier/text.
     //
     // Remember class of character under cursor.
@@ -3973,6 +3972,12 @@ static void nv_next(cmdarg_T *cap)
     normal_search(cap, 0, NULL, 0, SEARCH_MARK | cap->arg, NULL);
     cap->count1 -= 1;
   }
+
+  // Redraw the window to refresh the highlighted matches.
+  if (i > 0 && p_hls && !no_hlsearch
+      && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L)) {
+    redraw_later(curwin, UPD_SOME_VALID);
+  }
 }
 
 /// Search for "pat" in direction "dir" ('/' or '?', 0 for repeat).
@@ -3984,6 +3989,7 @@ static void nv_next(cmdarg_T *cap)
 static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int opt, int *wrapped)
 {
   searchit_arg_T sia;
+  pos_T const prev_cursor = curwin->w_cursor;
 
   cap->oap->motion_type = kMTCharWise;
   cap->oap->inclusive = false;
@@ -4006,6 +4012,11 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
     if (cap->oap->op_type == OP_NOP && (fdo_flags & FDO_SEARCH) && KeyTyped) {
       foldOpenCursor();
     }
+  }
+  // Redraw the window to refresh the highlighted matches.
+  if (!equalpos(curwin->w_cursor, prev_cursor) && p_hls && !no_hlsearch
+      && win_hl_attr(curwin, HLF_LC) != win_hl_attr(curwin, HLF_L)) {
+    redraw_later(curwin, UPD_SOME_VALID);
   }
 
   // "/$" will put the cursor after the end of the line, may need to

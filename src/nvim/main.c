@@ -545,10 +545,8 @@ int main(int argc, char **argv)
 
   no_wait_return = true;
 
-  //
   // Create the requested number of windows and edit buffers in them.
   // Also does recovery if "recoverymode" set.
-  //
   create_windows(&params);
   TIME_MSG("opening buffers");
 
@@ -1437,12 +1435,10 @@ scripterror:
       // On Windows expand "~\" or "~/" prefix in file names to profile directory.
 #ifdef MSWIN
       if (*p == '~' && (p[1] == '\\' || p[1] == '/')) {
-        char *profile_dir = vim_getenv("HOME");
-        size_t size = strlen(profile_dir) + strlen(p);
+        size_t size = strlen(os_get_homedir()) + strlen(p);
         char *tilde_expanded = xmalloc(size);
-        snprintf(tilde_expanded, size, "%s%s", profile_dir, p + 1);
+        snprintf(tilde_expanded, size, "%s%s", os_get_homedir(), p + 1);
         xfree(p);
-        xfree(profile_dir);
         p = tilde_expanded;
       }
 #endif

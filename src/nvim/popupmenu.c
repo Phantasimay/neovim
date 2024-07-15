@@ -17,6 +17,7 @@
 #include "nvim/buffer_updates.h"
 #include "nvim/change.h"
 #include "nvim/charset.h"
+#include "nvim/cmdexpand.h"
 #include "nvim/drawscreen.h"
 #include "nvim/edit.h"
 #include "nvim/errors.h"
@@ -143,7 +144,7 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
                    || (State == MODE_CMDLINE && ui_has(kUIWildmenu));
   }
 
-  pum_rl = (curwin->w_p_rl && State != MODE_CMDLINE);
+  pum_rl = State != MODE_CMDLINE && curwin->w_p_rl;
 
   do {
     // Mark the pum as visible already here,
@@ -437,70 +438,86 @@ void pum_display(pumitem_T *array, int size, int selected, bool array_changed, i
   pum_redraw();
 }
 
-/// Displays text on the popup menu with specific attributes.
-static void pum_puts_with_attr(int col, char *text, hlf_T hlf)
+/// Computes attributes of text on the popup menu.
+/// Returns attributes for every cell, or NULL if all attributes are the same.
+static int *pum_compute_text_attrs(char *text, hlf_T hlf)
 {
-  char *leader = ins_compl_leader();
-
-  if (leader == NULL || *leader == NUL || (hlf != HLF_PSI && hlf != HLF_PNI)
+  if ((hlf != HLF_PSI && hlf != HLF_PNI)
       || (win_hl_attr(curwin, HLF_PMSI) == win_hl_attr(curwin, HLF_PSI)
           && win_hl_attr(curwin, HLF_PMNI) == win_hl_attr(curwin, HLF_PNI))) {
-    grid_line_puts(col, text, -1, win_hl_attr(curwin, (int)hlf));
-    return;
+    return NULL;
   }
 
-  char *rt_leader = NULL;
-  if (curwin->w_p_rl) {
-    rt_leader = reverse_text(leader);
+  char *leader = State == MODE_CMDLINE ? cmdline_compl_pattern()
+                                       : ins_compl_leader();
+  if (leader == NULL || *leader == NUL) {
+    return NULL;
   }
-  char *match_leader = rt_leader != NULL ? rt_leader : leader;
-  size_t leader_len = strlen(match_leader);
 
-  const bool in_fuzzy = (get_cot_flags() & COT_FUZZY) != 0;
+  int *attrs = xmalloc(sizeof(int) * (size_t)vim_strsize(text));
+  bool in_fuzzy = State == MODE_CMDLINE ? cmdline_compl_is_fuzzy()
+                                        : (get_cot_flags() & COT_FUZZY) != 0;
+  size_t leader_len = strlen(leader);
 
   garray_T *ga = NULL;
+  bool matched_start = false;
+
   if (in_fuzzy) {
-    ga = fuzzy_match_str_with_pos(text, match_leader);
+    ga = fuzzy_match_str_with_pos(text, leader);
+  } else {
+    matched_start = mb_strnicmp(text, leader, leader_len) == 0;
   }
 
-  // Render text with proper attributes
   const char *ptr = text;
+  int cell_idx = 0;
+  uint32_t char_pos = 0;
+
   while (*ptr != NUL) {
-    int char_len = utfc_ptr2len(ptr);
-    int cells = utf_ptr2cells(ptr);
     int new_attr = win_hl_attr(curwin, (int)hlf);
 
     if (ga != NULL) {
       // Handle fuzzy matching
       for (int i = 0; i < ga->ga_len; i++) {
-        uint32_t *match_pos = ((uint32_t *)ga->ga_data) + i;
-        uint32_t actual_char_pos = 0;
-        const char *temp_ptr = text;
-        while (temp_ptr < ptr) {
-          temp_ptr += utfc_ptr2len(temp_ptr);
-          actual_char_pos++;
-        }
-        if (actual_char_pos == match_pos[0]) {
+        if (char_pos == ((uint32_t *)ga->ga_data)[i]) {
           new_attr = win_hl_attr(curwin, hlf == HLF_PSI ? HLF_PMSI : HLF_PMNI);
           break;
         }
       }
-    } else if (!in_fuzzy && ptr < text + leader_len
-               && strncmp(text, match_leader, leader_len) == 0) {
+    } else if (matched_start && ptr < text + leader_len) {
       new_attr = win_hl_attr(curwin, hlf == HLF_PSI ? HLF_PMSI : HLF_PMNI);
     }
 
-    grid_line_puts(col, ptr, char_len, new_attr);
-    col += cells;
-    ptr += char_len;
+    int char_cells = utf_ptr2cells(ptr);
+    for (int i = 0; i < char_cells; i++) {
+      attrs[cell_idx + i] = new_attr;
+    }
+    cell_idx += char_cells;
+
+    MB_PTR_ADV(ptr);
+    char_pos++;
   }
 
   if (ga != NULL) {
     ga_clear(ga);
     xfree(ga);
   }
-  if (rt_leader) {
-    xfree(rt_leader);
+  return attrs;
+}
+
+/// Displays text on the popup menu with specific attributes.
+static void pum_grid_puts_with_attrs(int col, int cells, const char *text, int textlen,
+                                     const int *attrs)
+{
+  const int col_start = col;
+  const char *ptr = text;
+
+  // Render text with proper attributes
+  while (*ptr != NUL && (textlen < 0 || ptr < text + textlen)) {
+    int char_len = utfc_ptr2len(ptr);
+    int attr = attrs[pum_rl ? (col_start + cells - col - 1) : (col - col_start)];
+    grid_line_puts(col, ptr, char_len, attr);
+    col += utf_ptr2cells(ptr);
+    ptr += char_len;
   }
 }
 
@@ -643,34 +660,49 @@ void pum_redraw(void)
               *p = saved;
             }
 
+            int *attrs = pum_compute_text_attrs(st, hlf);
+
             if (pum_rl) {
               char *rt = reverse_text(st);
               char *rt_start = rt;
-              int size = vim_strsize(rt);
+              int cells = vim_strsize(rt);
 
-              if (size > pum_width) {
+              if (cells > pum_width) {
                 do {
-                  size -= utf_ptr2cells(rt);
+                  cells -= utf_ptr2cells(rt);
                   MB_PTR_ADV(rt);
-                } while (size > pum_width);
+                } while (cells > pum_width);
 
-                if (size < pum_width) {
+                if (cells < pum_width) {
                   // Most left character requires 2-cells but only 1 cell
                   // is available on screen.  Put a '<' on the left of the
                   // pum item
                   *(--rt) = '<';
-                  size++;
+                  cells++;
                 }
               }
-              pum_puts_with_attr(grid_col - size + 1, rt, hlf);
+
+              if (attrs == NULL) {
+                grid_line_puts(grid_col - cells + 1, rt, -1, attr);
+              } else {
+                pum_grid_puts_with_attrs(grid_col - cells + 1, cells, rt, -1, attrs);
+              }
+
               xfree(rt_start);
               xfree(st);
               grid_col -= width;
             } else {
-              pum_puts_with_attr(grid_col, st, hlf);
+              if (attrs == NULL) {
+                grid_line_puts(grid_col, st, -1, attr);
+              } else {
+                pum_grid_puts_with_attrs(grid_col, vim_strsize(st), st, -1, attrs);
+              }
+
               xfree(st);
               grid_col += width;
             }
+
+            xfree(attrs);
 
             if (*p != TAB) {
               break;
@@ -713,7 +745,7 @@ void pum_redraw(void)
 
       if (pum_rl) {
         grid_line_fill(col_off - pum_base_width - n + 1, grid_col + 1, schar_from_ascii(' '), attr);
-        grid_col = col_off - pum_base_width - n + 1;
+        grid_col = col_off - pum_base_width - n;
       } else {
         grid_line_fill(grid_col, col_off + pum_base_width + n, schar_from_ascii(' '), attr);
         grid_col = col_off + pum_base_width + n;
@@ -1212,12 +1244,14 @@ void pum_set_event_info(dict_T *dict)
 static void pum_position_at_mouse(int min_width)
 {
   int min_row = 0;
+  int min_col = 0;
   int max_row = Rows;
   int max_col = Columns;
   if (mouse_grid > 1) {
     win_T *wp = get_win_by_grid_handle(mouse_grid);
     if (wp != NULL) {
       min_row = -wp->w_winrow;
+      min_col = -wp->w_wincol;
       max_row = MAX(Rows - wp->w_winrow, wp->w_grid.rows);
       max_col = MAX(Columns - wp->w_wincol, wp->w_grid.cols);
     }
@@ -1230,8 +1264,10 @@ static void pum_position_at_mouse(int min_width)
   } else {
     pum_anchor_grid = mouse_grid;
   }
-  if (max_row - mouse_row > pum_size) {
-    // Enough space below the mouse row.
+
+  if (max_row - mouse_row > pum_size || max_row - mouse_row > mouse_row - min_row) {
+    // Enough space below the mouse row,
+    // or there is more space below the mouse row than above.
     pum_above = false;
     pum_row = mouse_row + 1;
     if (pum_height > max_row - pum_row) {
@@ -1246,16 +1282,29 @@ static void pum_position_at_mouse(int min_width)
       pum_row = min_row;
     }
   }
-  if (max_col - mouse_col >= pum_base_width
-      || max_col - mouse_col > min_width) {
-    // Enough space to show at mouse column.
-    pum_col = mouse_col;
+
+  if (pum_rl) {
+    if (mouse_col - min_col + 1 >= pum_base_width
+        || mouse_col - min_col + 1 > min_width) {
+      // Enough space to show at mouse column.
+      pum_col = mouse_col;
+    } else {
+      // Not enough space, left align with window.
+      pum_col = min_col + MIN(pum_base_width, min_width) - 1;
+    }
+    pum_width = pum_col - min_col + 1;
   } else {
-    // Not enough space, right align with window.
-    pum_col = max_col - (pum_base_width > min_width ? min_width : pum_base_width);
+    if (max_col - mouse_col >= pum_base_width
+        || max_col - mouse_col > min_width) {
+      // Enough space to show at mouse column.
+      pum_col = mouse_col;
+    } else {
+      // Not enough space, right align with window.
+      pum_col = max_col - MIN(pum_base_width, min_width);
+    }
+    pum_width = max_col - pum_col;
   }
 
-  pum_width = max_col - pum_col;
   if (pum_width > pum_base_width + 1) {
     pum_width = pum_base_width + 1;
   }
@@ -1274,7 +1323,7 @@ static void pum_select_mouse_pos(void)
 
   int idx = mouse_row - pum_row;
 
-  if (idx < 0 || idx >= pum_size) {
+  if (idx < 0 || idx >= pum_height) {
     pum_selected = -1;
   } else if (*pum_array[idx].pum_text != NUL) {
     pum_selected = idx;
@@ -1337,6 +1386,7 @@ void pum_show_popupmenu(vimmenu_T *menu)
   pum_compute_size();
   pum_scrollbar = 0;
   pum_height = pum_size;
+  pum_rl = curwin->w_p_rl;
   pum_position_at_mouse(20);
 
   pum_selected = -1;
@@ -1416,7 +1466,9 @@ void pum_make_popup(const char *path_name, int use_mouse_pos)
     // Hack: set mouse position at the cursor so that the menu pops up
     // around there.
     mouse_row = curwin->w_grid.row_offset + curwin->w_wrow;
-    mouse_col = curwin->w_grid.col_offset + curwin->w_wcol;
+    mouse_col = curwin->w_grid.col_offset
+                + (curwin->w_p_rl ? curwin->w_width_inner - curwin->w_wcol - 1
+                                  : curwin->w_wcol);
     if (ui_has(kUIMultigrid)) {
       mouse_grid = curwin->w_grid.target->handle;
     } else if (curwin->w_grid.target != &default_grid) {

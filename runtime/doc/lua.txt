@@ -543,15 +543,18 @@ Example: File-change detection                                    *watch-file*
     vim.api.nvim_command(
       "command! -nargs=1 Watch call luaeval('watch_file(_A)', expand('<args>'))")
 <
-                                                         *fswatch-limitations*
-When on Linux and using fswatch, you may need to increase the maximum number
-of `inotify` watches and queued events as the default limit can be too low. To
-increase the limit, run: >sh
-    sysctl fs.inotify.max_user_watches=100000
-    sysctl fs.inotify.max_queued_events=100000
+                                                         *inotify-limitations*
+When on Linux you may need to increase the maximum number of `inotify` watches
+and queued events as the default limit can be too low. To increase the limit,
+run: >sh
+    sysctl fs.inotify.max_user_watches=494462
 <
-This will increase the limit to 100000 watches and queued events. These lines
+This will increase the limit to 494462 watches and queued events. These lines
 can be added to `/etc/sysctl.conf` to make the changes persistent.
+
+Note that each watch is a structure in the Kernel, thus available memory is
+also a bottleneck for using inotify. In fact, a watch can take up to 1KB of
+space. This means a million watches could result in 1GB of extra RAM usage.
 
 Example: TCP echo-server                                          *tcp-server*
     1. Save this code to a file.
@@ -4330,7 +4333,7 @@ vim.snippet.active({filter})                            *vim.snippet.active()*
     You can use this function to navigate a snippet as follows: >lua
         vim.keymap.set({ 'i', 's' }, '<Tab>', function()
            if vim.snippet.active({ direction = 1 }) then
-             return '<cmd>lua vim.snippet.jump(1)<cr>'
+             return '<Cmd>lua vim.snippet.jump(1)<CR>'
            else
              return '<Tab>'
            end
@@ -4364,7 +4367,7 @@ vim.snippet.jump({direction})                             *vim.snippet.jump()*
     For example, map `<Tab>` to jump while a snippet is active: >lua
         vim.keymap.set({ 'i', 's' }, '<Tab>', function()
            if vim.snippet.active({ direction = 1 }) then
-             return '<cmd>lua vim.snippet.jump(1)<cr>'
+             return '<Cmd>lua vim.snippet.jump(1)<CR>'
            else
              return '<Tab>'
            end

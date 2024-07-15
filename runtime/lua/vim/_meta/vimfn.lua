@@ -2523,12 +2523,25 @@ function vim.fn.get(blob, idx, default) end
 --- @return any
 function vim.fn.get(dict, key, default) end
 
---- Get item {what} from Funcref {func}.  Possible values for
+--- Get item {what} from |Funcref| {func}.  Possible values for
 --- {what} are:
----   "name"  The function name
----   "func"  The function
----   "dict"  The dictionary
----   "args"  The list with arguments
+---   "name"    The function name
+---   "func"    The function
+---   "dict"    The dictionary
+---   "args"    The list with arguments
+---   "arity"   A dictionary with information about the number of
+---       arguments accepted by the function (minus the
+---       {arglist}) with the following fields:
+---     required    the number of positional arguments
+---     optional    the number of optional arguments,
+---           in addition to the required ones
+---     varargs     |TRUE| if the function accepts a
+---           variable number of arguments |...|
+---
+---     Note: There is no error, if the {arglist} of
+---     the Funcref contains more arguments than the
+---     Funcref expects, it's not validated.
+---
 --- Returns zero on error.
 ---
 --- @param func function
@@ -2929,6 +2942,7 @@ function vim.fn.getcmdwintype() end
 --- customlist,{func} custom completion, defined via {func}
 --- diff_buffer  |:diffget| and |:diffput| completion
 --- dir    directory names
+--- dir_in_path  directory names in |'cdpath'|
 --- environment  environment variable names
 --- event    autocommand events
 --- expression  Vim expression
@@ -4302,7 +4316,7 @@ function vim.fn.iconv(string, from, to) end
 --- Note that `v:_null_string`, `v:_null_list`, `v:_null_dict` and
 --- `v:_null_blob` have the same `id()` with different types
 --- because they are internally represented as NULL pointers.
---- `id()` returns a hexadecimal representanion of the pointers to
+--- `id()` returns a hexadecimal representation of the pointers to
 --- the containers (i.e. like `0x994a40`), same as `printf("%p",
 --- {expr})`, but it is advised against counting on the exact
 --- format of the return value.
@@ -6177,12 +6191,7 @@ function vim.fn.msgpackdump(list, type) end
 ---      C parser does not support such values.
 --- float  |Float|. This value cannot possibly appear in
 ---   |msgpackparse()| output.
---- string  |readfile()|-style list of strings. This value will
----   appear in |msgpackparse()| output if string contains
----   zero byte or if string is a mapping key and mapping is
----   being represented as special dictionary for other
----   reasons.
---- binary  |String|, or |Blob| if binary string contains zero
+--- string  |String|, or |Blob| if binary string contains zero
 ---   byte. This value cannot appear in |msgpackparse()|
 ---   output since blobs were introduced.
 --- array  |List|. This value cannot appear in |msgpackparse()|
@@ -8432,6 +8441,7 @@ function vim.fn.sign_define(name, dict) end
 ---    icon    full path to the bitmap file for the sign.
 ---    linehl  highlight group used for the whole line the
 ---     sign is placed in.
+---    priority  default priority value of the sign
 ---    numhl  highlight group used for the line number where
 ---     the sign is placed.
 ---    text    text that is displayed when there is no icon
@@ -8482,6 +8492,7 @@ function vim.fn.sign_define(list) end
 ---    linehl  highlight group used for the whole line the
 ---     sign is placed in; not present if not set.
 ---    name    name of the sign
+---    priority  default priority value of the sign
 ---    numhl  highlight group used for the line number where
 ---     the sign is placed; not present if not set.
 ---    text    text that is displayed when there is no icon
@@ -8673,7 +8684,8 @@ function vim.fn.sign_place(id, group, name, buf, dict) end
 ---     priority  Priority of the sign. When multiple signs are
 ---     placed on a line, the sign with the highest
 ---     priority is used. If not specified, the
----     default value of 10 is used. See
+---     default value of 10 is used, unless specified
+---     otherwise by the sign definition. See
 ---     |sign-priority| for more information.
 ---
 --- If {id} refers to an existing sign, then the existing sign is

@@ -141,6 +141,27 @@ describe('vim.lsp.completion: item conversion', function()
     eq(expected, result)
   end)
 
+  it('filters on label if filterText is missing', function()
+    local completion_list = {
+      { label = 'foo' },
+      { label = 'bar' },
+    }
+    local result = complete('fo|', completion_list)
+    local expected = {
+      {
+        abbr = 'foo',
+        word = 'foo',
+      },
+    }
+    result = vim.tbl_map(function(x)
+      return {
+        abbr = x.abbr,
+        word = x.word,
+      }
+    end, result.items)
+    eq(expected, result)
+  end)
+
   it('trims trailing newline or tab from textEdit', function()
     local range0 = {
       start = { line = 0, character = 0 },
@@ -404,6 +425,33 @@ describe('vim.lsp.completion: item conversion', function()
       eq(1, #result.items)
       local text = result.items[1].user_data.nvim.lsp.completion_item.textEdit.newText
       eq('the-insertText', text)
+    end
+  )
+
+  it(
+    'defaults to label as textEdit.newText if insertText or textEditText are not present',
+    function()
+      local completion_list = {
+        isIncomplete = false,
+        itemDefaults = {
+          editRange = {
+            start = { line = 1, character = 1 },
+            ['end'] = { line = 1, character = 4 },
+          },
+          insertTextFormat = 2,
+          data = 'foobar',
+        },
+        items = {
+          {
+            label = 'hello',
+            data = 'item-property-has-priority',
+          },
+        },
+      }
+      local result = complete('|', completion_list)
+      eq(1, #result.items)
+      local text = result.items[1].user_data.nvim.lsp.completion_item.textEdit.newText
+      eq('hello', text)
     end
   )
 end)
