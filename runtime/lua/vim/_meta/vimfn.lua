@@ -1593,7 +1593,7 @@ function vim.fn.eventhandler() end
 --- On MS-Windows the ".exe", ".bat", etc. can optionally be
 --- included.  Then the extensions in $PATHEXT are tried.  Thus if
 --- "foo.exe" does not exist, "foo.exe.bat" can be found.  If
---- $PATHEXT is not set then ".exe;.com;.bat;.cmd" is used.  A dot
+--- $PATHEXT is not set then ".com;.exe;.bat;.cmd" is used.  A dot
 --- by itself can be used in $PATHEXT to try using the name
 --- without an extension.  When 'shell' looks like a Unix shell,
 --- then the name is also tried without adding an extension.
@@ -2861,7 +2861,7 @@ function vim.fn.getcharpos(expr) end
 ---   nnoremap <expr> , getcharsearch().forward ? ',' : ';'
 --- <Also see |setcharsearch()|.
 ---
---- @return table[]
+--- @return table
 function vim.fn.getcharsearch() end
 
 --- Get a single character from the user or input stream as a
@@ -5262,6 +5262,7 @@ function vim.fn.map(expr1, expr2) end
 ---   "lhsrawalt" The {lhs} of the mapping as raw bytes, alternate
 ---         form, only present when it differs from "lhsraw"
 ---   "rhs"       The {rhs} of the mapping as typed.
+---   "callback" Lua function, if RHS was defined as such.
 ---   "silent"   1 for a |:map-silent| mapping, else 0.
 ---   "noremap"  1 if the {rhs} of the mapping is not remappable.
 ---   "script"   1 if mapping was defined with <script>.
@@ -6702,7 +6703,7 @@ function vim.fn.printf(fmt, expr1) end
 --- If the buffer doesn't exist or isn't a prompt buffer, an empty
 --- string is returned.
 ---
---- @param buf any
+--- @param buf integer|string
 --- @return any
 function vim.fn.prompt_getprompt(buf) end
 
@@ -6737,8 +6738,8 @@ function vim.fn.prompt_getprompt(buf) end
 ---    endfunc
 ---    call prompt_setcallback(bufnr(), function('s:TextEntered'))
 ---
---- @param buf any
---- @param expr any
+--- @param buf integer|string
+--- @param expr string|function
 --- @return any
 function vim.fn.prompt_setcallback(buf, expr) end
 
@@ -6750,8 +6751,8 @@ function vim.fn.prompt_setcallback(buf, expr) end
 --- mode.  Without setting a callback Vim will exit Insert mode,
 --- as in any buffer.
 ---
---- @param buf any
---- @param expr any
+--- @param buf integer|string
+--- @param expr string|function
 --- @return any
 function vim.fn.prompt_setinterrupt(buf, expr) end
 
@@ -6762,8 +6763,8 @@ function vim.fn.prompt_setinterrupt(buf, expr) end
 ---   call prompt_setprompt(bufnr(''), 'command: ')
 --- <
 ---
---- @param buf any
---- @param text any
+--- @param buf integer|string
+--- @param text string
 --- @return any
 function vim.fn.prompt_setprompt(buf, text) end
 
@@ -7419,6 +7420,9 @@ function vim.fn.screenstring(row, col) end
 --- {timeout} is 500 the search stops after half a second.
 --- The value must not be negative.  A zero value is like not
 --- giving the argument.
+---
+--- Note: the timeout is only considered when searching, not
+--- while evaluating the {skip} expression.
 ---
 --- If the {skip} expression is given it is evaluated with the
 --- cursor positioned on the start of a match.  If it evaluates to

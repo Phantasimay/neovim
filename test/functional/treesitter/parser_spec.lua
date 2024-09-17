@@ -135,9 +135,7 @@ void ui_refresh(void)
     insert(test_text)
 
     eq(
-      '.../treesitter.lua:0: There is no parser available for buffer 1 and one'
-        .. ' could not be created because lang could not be determined. Either'
-        .. ' pass lang or set the buffer filetype',
+      '.../treesitter.lua:0: Parser not found.',
       pcall_err(exec_lua, 'vim.treesitter.get_parser(0)')
     )
 
@@ -591,8 +589,7 @@ print()
             vim.treesitter.query.parse('c', '((number_literal) @number (#set! "key" "value"))')
           local parser = vim.treesitter.get_parser(0, 'c')
 
-          local _, _, metadata =
-            query:iter_matches(parser:parse()[1]:root(), 0, 0, -1, { all = true })()
+          local _, _, metadata = query:iter_matches(parser:parse()[1]:root(), 0, 0, -1)()
           return metadata.key
         end)
 
@@ -612,8 +609,7 @@ print()
             )
             local parser = vim.treesitter.get_parser(0, 'c')
 
-            local _, _, metadata =
-              query:iter_matches(parser:parse()[1]:root(), 0, 0, -1, { all = true })()
+            local _, _, metadata = query:iter_matches(parser:parse()[1]:root(), 0, 0, -1)()
             local _, nested_tbl = next(metadata)
             return nested_tbl.key
           end)
@@ -633,8 +629,7 @@ print()
             )
             local parser = vim.treesitter.get_parser(0, 'c')
 
-            local _, _, metadata =
-              query:iter_matches(parser:parse()[1]:root(), 0, 0, -1, { all = true })()
+            local _, _, metadata = query:iter_matches(parser:parse()[1]:root(), 0, 0, -1)()
             local _, nested_tbl = next(metadata)
             return nested_tbl
           end)

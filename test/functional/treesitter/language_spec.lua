@@ -8,6 +8,7 @@ local exec_lua = n.exec_lua
 local pcall_err = t.pcall_err
 local matches = t.matches
 local insert = n.insert
+local NIL = vim.NIL
 
 before_each(clear)
 
@@ -15,9 +16,11 @@ describe('treesitter language API', function()
   -- error tests not requiring a parser library
   it('handles missing language', function()
     eq(
-      ".../language.lua:0: no parser for 'borklang' language, see :help treesitter-parsers",
+      '.../treesitter.lua:0: Parser not found.',
       pcall_err(exec_lua, "parser = vim.treesitter.get_parser(0, 'borklang')")
     )
+
+    eq(NIL, exec_lua("return vim.treesitter._get_parser(0, 'borklang')"))
 
     -- actual message depends on platform
     matches(
@@ -57,8 +60,12 @@ describe('treesitter language API', function()
     local keys, fields, symbols = unpack(exec_lua(function()
       local lang = vim.treesitter.language.inspect('c')
       local keys, symbols = {}, {}
-      for k, _ in pairs(lang) do
-        keys[k] = true
+      for k, v in pairs(lang) do
+        if type(v) == 'boolean' then
+          keys[k] = v
+        else
+          keys[k] = true
+        end
       end
 
       -- symbols array can have "holes" and is thus not a valid msgpack array
@@ -69,7 +76,7 @@ describe('treesitter language API', function()
       return { keys, lang.fields, symbols }
     end))
 
-    eq({ fields = true, symbols = true, _abi_version = true }, keys)
+    eq({ fields = true, symbols = true, _abi_version = true, _wasm = false }, keys)
 
     local fset = {}
     for _, f in pairs(fields) do
@@ -101,9 +108,10 @@ describe('treesitter language API', function()
       command('set filetype=borklang')
       -- Should throw an error when filetype changes to borklang
       eq(
-        ".../language.lua:0: no parser for 'borklang' language, see :help treesitter-parsers",
+        '.../treesitter.lua:0: Parser not found.',
         pcall_err(exec_lua, "new_parser = vim.treesitter.get_parser(0, 'borklang')")
       )
+      eq(NIL, exec_lua("return vim.treesitter._get_parser(0, 'borklang')"))
     end
   )
 

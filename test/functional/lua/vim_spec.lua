@@ -145,10 +145,9 @@ describe('lua stdlib', function()
         -- "0.10" or "0.10-dev+xxx"
         local curstr = ('%s.%s%s'):format(curver.major, curver.minor, prerel or '')
         eq(
-          dedent(
-            [[
-            foo.bar() is deprecated. Run ":checkhealth vim.deprecated" for more information]]
-          ):format(curstr),
+          ([[foo.bar() is deprecated. Run ":checkhealth vim.deprecated" for more information]]):format(
+            curstr
+          ),
           exec_lua('return vim.deprecate(...)', 'foo.bar()', 'zub.wooo{ok=yay}', curstr)
         )
         -- Same message as above; skipped this time.
@@ -178,8 +177,7 @@ describe('lua stdlib', function()
 
       it('plugin=nil, to be deleted in the next major version (1.0)', function()
         eq(
-          dedent [[
-            foo.baz() is deprecated. Run ":checkhealth vim.deprecated" for more information]],
+          [[foo.baz() is deprecated. Run ":checkhealth vim.deprecated" for more information]],
           exec_lua [[ return vim.deprecate('foo.baz()', nil, '1.0') ]]
         )
       end)
@@ -1061,7 +1059,7 @@ describe('lua stdlib', function()
       local a = { a = {[2] = 3} }
       local b = { a = {[3] = 3} }
       local c = vim.tbl_deep_extend("force", a, b)
-      return vim.deep_equal(c, {a = {[3] = 3}})
+      return vim.deep_equal(c, {a = {[2] = 3, [3] = 3}})
     ]]))
 
     eq(
@@ -1073,34 +1071,28 @@ describe('lua stdlib', function()
     ]])
     )
 
-    matches(
-      'invalid "behavior": nil',
-      pcall_err(
-        exec_lua,
-        [[
-        return vim.tbl_deep_extend()
-      ]]
-      )
-    )
+    ok(exec_lua([[
+      local a = { sub = { 'a', 'b' } }
+      local b = { sub = { 'b', 'c' } }
+      local c = vim.tbl_deep_extend('force', a, b)
+      return vim.deep_equal(c, { sub = { 'b', 'c' } })
+    ]]))
+
+    matches('invalid "behavior": nil', pcall_err(exec_lua, [[return vim.tbl_deep_extend()]]))
 
     matches(
       'wrong number of arguments %(given 1, expected at least 3%)',
-      pcall_err(
-        exec_lua,
-        [[
-        return vim.tbl_deep_extend("keep")
-      ]]
-      )
+      pcall_err(exec_lua, [[return vim.tbl_deep_extend("keep")]])
     )
 
     matches(
       'wrong number of arguments %(given 2, expected at least 3%)',
-      pcall_err(
-        exec_lua,
-        [[
-        return vim.tbl_deep_extend("keep", {})
-      ]]
-      )
+      pcall_err(exec_lua, [[return vim.tbl_deep_extend("keep", {})]])
+    )
+
+    matches(
+      'after the second argument%: expected table, got number',
+      pcall_err(exec_lua, [[return vim.tbl_deep_extend("keep", {}, 42)]])
     )
   end)
 

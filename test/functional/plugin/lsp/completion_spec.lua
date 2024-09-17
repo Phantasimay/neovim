@@ -18,35 +18,36 @@ local create_server_definition = t_lsp.create_server_definition
 ---@param candidates lsp.CompletionList|lsp.CompletionItem[]
 ---@param lnum? integer 0-based, defaults to 0
 ---@return {items: table[], server_start_boundary: integer?}
-local function complete(line, candidates, lnum)
+local function complete(line, candidates, lnum, server_boundary)
   lnum = lnum or 0
   -- nvim_win_get_cursor returns 0 based column, line:find returns 1 based
   local cursor_col = line:find('|') - 1
   line = line:gsub('|', '')
   return exec_lua(
     [[
-    local line, cursor_col, lnum, result = ...
+    local line, cursor_col, lnum, result, server_boundary = ...
     local line_to_cursor = line:sub(1, cursor_col)
     local client_start_boundary = vim.fn.match(line_to_cursor, '\\k*$')
-    local items, server_start_boundary = require("vim.lsp.completion")._convert_results(
+    local items, new_server_boundary = require("vim.lsp.completion")._convert_results(
       line,
       lnum,
       cursor_col,
       1,
       client_start_boundary,
-      nil,
+      server_boundary,
       result,
       "utf-16"
     )
     return {
       items = items,
-      server_start_boundary = server_start_boundary
+      server_start_boundary = new_server_boundary
     }
   ]],
     line,
     cursor_col,
     lnum,
-    candidates
+    candidates,
+    server_boundary
   )
 end
 
@@ -151,6 +152,26 @@ describe('vim.lsp.completion: item conversion', function()
       {
         abbr = 'foo',
         word = 'foo',
+      },
+    }
+    result = vim.tbl_map(function(x)
+      return {
+        abbr = x.abbr,
+        word = x.word,
+      }
+    end, result.items)
+    eq(expected, result)
+  end)
+
+  it('works on non word prefix', function()
+    local completion_list = {
+      { label = ' foo', insertText = '->foo' },
+    }
+    local result = complete('wp.|', completion_list, 0, 2)
+    local expected = {
+      {
+        abbr = ' foo',
+        word = '->foo',
       },
     }
     result = vim.tbl_map(function(x)
@@ -495,7 +516,9 @@ describe('vim.lsp.completion: protocol', function()
       bufnr = vim.api.nvim_get_current_buf()
       vim.api.nvim_win_set_buf(0, bufnr)
       return vim.lsp.start({ name = 'dummy', cmd = server.cmd, on_attach = function(client, bufnr)
-        vim.lsp.completion.enable(true, client.id, bufnr)
+        vim.lsp.completion.enable(true, client.id, bufnr, { convert = function(item)
+          return { abbr = item.label:gsub('%b()', '')}
+        end})
       end})
     ]],
       completion_result
@@ -698,6 +721,23 @@ describe('vim.lsp.completion: protocol', function()
       eq(1, #matches)
       eq('hello', matches[1].word)
       eq(true, exec_lua('return _G.called'))
+    end)
+  end)
+
+  it('enable(…,{convert=fn}) custom word/abbr format', function()
+    create_server({
+      isIncomplete = false,
+      items = {
+        {
+          label = 'foo(bar)',
+        },
+      },
+    })
+
+    feed('ifo')
+    trigger_at_pos({ 1, 1 })
+    assert_matches(function(matches)
+      eq('foo', matches[1].abbr)
     end)
   end)
 end)

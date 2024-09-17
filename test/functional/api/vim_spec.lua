@@ -1435,6 +1435,28 @@ describe('API', function()
     it('cannot handle NULs', function()
       eq(0, api.nvim_strwidth('\0abc'))
     end)
+
+    it('can handle emoji with variant selectors and ZWJ', function()
+      local selector = '❤️'
+      eq(2, fn.strchars(selector))
+      eq(1, fn.strcharlen(selector))
+      eq(2, api.nvim_strwidth(selector))
+
+      local no_selector = '❤'
+      eq(1, fn.strchars(no_selector))
+      eq(1, fn.strcharlen(no_selector))
+      eq(1, api.nvim_strwidth(no_selector))
+
+      local selector_zwj_selector = '🏳️‍⚧️'
+      eq(5, fn.strchars(selector_zwj_selector))
+      eq(1, fn.strcharlen(selector_zwj_selector))
+      eq(2, api.nvim_strwidth(selector_zwj_selector))
+
+      local emoji_zwj_emoji = '🧑‍🌾'
+      eq(3, fn.strchars(emoji_zwj_emoji))
+      eq(1, fn.strcharlen(emoji_zwj_emoji))
+      eq(2, api.nvim_strwidth(emoji_zwj_emoji))
+    end)
   end)
 
   describe('nvim_get_current_line, nvim_set_current_line', function()
@@ -3179,7 +3201,7 @@ describe('API', function()
   end)
 
   describe('nvim_get_runtime_file', function()
-    local p = n.alter_slashes
+    local p = t.fix_slashes
     it('can find files', function()
       eq({}, api.nvim_get_runtime_file('bork.borkbork', false))
       eq({}, api.nvim_get_runtime_file('bork.borkbork', true))
@@ -3188,36 +3210,36 @@ describe('API', function()
       local val = api.nvim_get_runtime_file('autoload/remote/*.vim', true)
       eq(2, #val)
       if endswith(val[1], 'define.vim') then
-        ok(endswith(val[1], p 'autoload/remote/define.vim'))
-        ok(endswith(val[2], p 'autoload/remote/host.vim'))
+        ok(endswith(p(val[1]), 'autoload/remote/define.vim'))
+        ok(endswith(p(val[2]), 'autoload/remote/host.vim'))
       else
-        ok(endswith(val[1], p 'autoload/remote/host.vim'))
-        ok(endswith(val[2], p 'autoload/remote/define.vim'))
+        ok(endswith(p(val[1]), 'autoload/remote/host.vim'))
+        ok(endswith(p(val[2]), 'autoload/remote/define.vim'))
       end
       val = api.nvim_get_runtime_file('autoload/remote/*.vim', false)
       eq(1, #val)
       ok(
-        endswith(val[1], p 'autoload/remote/define.vim')
-          or endswith(val[1], p 'autoload/remote/host.vim')
+        endswith(p(val[1]), 'autoload/remote/define.vim')
+          or endswith(p(val[1]), 'autoload/remote/host.vim')
       )
 
       val = api.nvim_get_runtime_file('lua', true)
       eq(1, #val)
-      ok(endswith(val[1], p 'lua'))
+      ok(endswith(p(val[1]), 'lua'))
 
       val = api.nvim_get_runtime_file('lua/vim', true)
       eq(1, #val)
-      ok(endswith(val[1], p 'lua/vim'))
+      ok(endswith(p(val[1]), 'lua/vim'))
     end)
 
     it('can find directories', function()
       local val = api.nvim_get_runtime_file('lua/', true)
       eq(1, #val)
-      ok(endswith(val[1], p 'lua/'))
+      ok(endswith(p(val[1]), 'lua/'))
 
       val = api.nvim_get_runtime_file('lua/vim/', true)
       eq(1, #val)
-      ok(endswith(val[1], p 'lua/vim/'))
+      ok(endswith(p(val[1]), 'lua/vim/'))
 
       eq({}, api.nvim_get_runtime_file('foobarlang/', true))
     end)

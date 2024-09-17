@@ -761,9 +761,9 @@ return {
         	list:{n}    Adds an additional indent for lines that match a
         		    numbered or bulleted list (using the
         		    'formatlistpat' setting).
-        	list:-1	    Uses the length of a match with 'formatlistpat'
-        		    for indentation.
         		    (default: 0)
+        	list:-1	    Uses the width of a match with 'formatlistpat' for
+        		    indentation.
         	column:{n}  Indent at column {n}. Will overrule the other
         		    sub-options. Note: an additional indent may be
         		    added for the 'showbreak' setting.
@@ -2326,9 +2326,12 @@ return {
       desc = [=[
         When on all Unicode emoji characters are considered to be full width.
         This excludes "text emoji" characters, which are normally displayed as
-        single width.  Unfortunately there is no good specification for this
-        and it has been determined on trial-and-error basis.  Use the
-        |setcellwidths()| function to change the behavior.
+        single width. However, such "text emoji" are treated as full-width
+        emoji if they are followed by the U+FE0F variant selector.
+
+        Unfortunately there is no good specification for this and it has been
+        determined on trial-and-error basis.  Use the |setcellwidths()|
+        function to change the behavior.
       ]=],
       full_name = 'emoji',
       redraw = { 'all_windows', 'ui_option' },
@@ -9044,7 +9047,7 @@ return {
       desc = [=[
         When on, the title of the window will be set to the value of
         'titlestring' (if it is not empty), or to:
-        	filename [+=-] (path) - NVIM
+        	filename [+=-] (path) - Nvim
         Where:
         	filename	the name of the file being edited
         	-		indicates the file cannot be modified, 'ma' off
@@ -9052,11 +9055,11 @@ return {
         	=		indicates the file is read-only
         	=+		indicates the file is read-only and modified
         	(path)		is the path of the file being edited
-        	- NVIM		the server name |v:servername| or "NVIM"
+        	- Nvim		the server name |v:servername| or "Nvim"
       ]=],
       full_name = 'title',
       scope = { 'global' },
-      short_desc = N_('Vim set the title of the window'),
+      short_desc = N_('set the title of the window'),
       type = 'boolean',
       varname = 'p_title',
     },

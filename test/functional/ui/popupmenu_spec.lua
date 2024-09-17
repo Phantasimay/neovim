@@ -851,6 +851,8 @@ describe('ui/ext_popupmenu', function()
       set mouse=a mousemodel=popup
 
       aunmenu PopUp
+      " Delete the default MenuPopup event handler.
+      autocmd! nvim_popupmenu
       menu PopUp.foo :let g:menustr = 'foo'<CR>
       menu PopUp.bar :let g:menustr = 'bar'<CR>
       menu PopUp.baz :let g:menustr = 'baz'<CR>
@@ -3805,6 +3807,8 @@ describe('builtin popupmenu', function()
         call setline(1, 'popup menu test')
         set mouse=a mousemodel=popup
 
+        " Delete the default MenuPopup event handler.
+        autocmd! nvim_popupmenu
         aunmenu PopUp
         menu PopUp.foo :let g:menustr = 'foo'<CR>
         menu PopUp.bar :let g:menustr = 'bar'<CR>
@@ -4489,6 +4493,9 @@ describe('builtin popupmenu', function()
       -- oldtest: Test_popup_command_dump()
       it(':popup command', function()
         exec([[
+          " Delete the default MenuPopup event handler.
+          autocmd! nvim_popupmenu
+
           func ChangeMenu()
             aunmenu PopUp.&Paste
             nnoremenu 1.40 PopUp.&Paste :echomsg "pasted"<CR>
@@ -4646,6 +4653,8 @@ describe('builtin popupmenu', function()
         screen:try_resize(50, 20)
         exec([[
           set mousemodel=popup_setpos
+          " Delete the default MenuPopup event handler.
+          autocmd! nvim_popupmenu
           aunmenu *
           source $VIMRUNTIME/menu.vim
           call setline(1, join(range(20)))
@@ -5008,6 +5017,47 @@ describe('builtin popupmenu', function()
           {dn:你好   W extra text 3 }{1:          }|
           {1:~                               }|*15
           {2:-- }{5:match 2 of 3}                 |
+        ]])
+        feed('<C-E><Esc>')
+      end)
+
+      -- oldtest: Test_pum_user_kind_hlgroup()
+      it('custom kind_hlgroup override', function()
+        exec([[
+          func CompleteFunc( findstart, base )
+            if a:findstart
+              return 0
+            endif
+            return {
+                  \ 'words': [
+                  \ { 'word': 'aword1', 'menu': 'extra text 1', 'kind': 'variable', 'kind_hlgroup': 'KindVar', 'hl_group': 'StrikeFake' },
+                  \ { 'word': 'aword2', 'menu': 'extra text 2', 'kind': 'function', 'kind_hlgroup': 'KindFunc' },
+                  \ { 'word': '你好', 'menu': 'extra text 3', 'kind': 'class', 'kind_hlgroup': 'KindClass'  },
+                  \]}
+          endfunc
+          set completeopt=menu
+          set completefunc=CompleteFunc
+
+          hi StrikeFake guifg=DarkRed
+          hi KindVar guifg=DarkYellow
+          hi KindFunc guifg=DarkBlue
+          hi KindClass guifg=DarkGreen
+        ]])
+
+        local attr_ids = screen:get_default_attr_ids()
+        attr_ids.kvs = { foreground = Screen.colors.DarkYellow, background = Screen.colors.Grey }
+        attr_ids.kfn = { foreground = Screen.colors.DarkBlue, background = Screen.colors.Plum1 }
+        attr_ids.kcn = { foreground = Screen.colors.DarkGreen, background = Screen.colors.Plum1 }
+        screen:set_default_attr_ids(attr_ids)
+
+        feed('S<C-X><C-U>')
+        screen:expect([[
+          aword1^                          |
+          {ds:aword1 }{kvs:variable }{ds:extra text 1 }{1:   }|
+          {n:aword2 }{kfn:function }{n:extra text 2 }{1:   }|
+          {n:你好   }{kcn:class    }{n:extra text 3 }{1:   }|
+          {1:~                               }|*15
+          {2:-- }{5:match 1 of 3}                 |
         ]])
         feed('<C-E><Esc>')
       end)
