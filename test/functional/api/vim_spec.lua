@@ -366,7 +366,6 @@ describe('API', function()
 
     it('displays messages when opts.output=false', function()
       local screen = Screen.new(40, 8)
-      screen:attach()
       api.nvim_exec2("echo 'hello'", { output = false })
       screen:expect {
         grid = [[
@@ -379,7 +378,6 @@ describe('API', function()
 
     it("doesn't display messages when output=true", function()
       local screen = Screen.new(40, 6)
-      screen:attach()
       api.nvim_exec2("echo 'hello'", { output = true })
       screen:expect {
         grid = [[
@@ -697,7 +695,7 @@ describe('API', function()
         pcall_err(request, 'nvim_call_dict_function', 42, 'f', { 1, 2 })
       )
       eq(
-        'Failed to evaluate dict expression',
+        'Vim:E121: Undefined variable: foo',
         pcall_err(request, 'nvim_call_dict_function', 'foo', 'f', { 1, 2 })
       )
       eq('dict not found', pcall_err(request, 'nvim_call_dict_function', '42', 'f', { 1, 2 }))
@@ -1278,7 +1276,6 @@ describe('API', function()
     end)
     it('pasting with empty last chunk in Cmdline mode', function()
       local screen = Screen.new(20, 4)
-      screen:attach()
       feed(':')
       api.nvim_paste('Foo', true, 1)
       api.nvim_paste('', true, 3)
@@ -1290,7 +1287,6 @@ describe('API', function()
     end)
     it('pasting text with control characters in Cmdline mode', function()
       local screen = Screen.new(20, 4)
-      screen:attach()
       feed(':')
       api.nvim_paste('normal! \023\022\006\027', true, -1)
       screen:expect([[
@@ -1675,7 +1671,6 @@ describe('API', function()
       eq({ 1, 5 }, api.nvim_win_get_cursor(0))
 
       local screen = Screen.new(60, 3)
-      screen:attach()
       eq(1, eval('v:hlsearch'))
       screen:expect {
         grid = [[
@@ -1775,6 +1770,11 @@ describe('API', function()
     end)
 
     it('validation', function()
+      eq("Unknown option 'foobar'", pcall_err(api.nvim_set_option_value, 'foobar', 'baz', {}))
+      eq(
+        "Unknown option 'foobar'",
+        pcall_err(api.nvim_set_option_value, 'foobar', 'baz', { win = api.nvim_get_current_win() })
+      )
       eq(
         "Invalid 'scope': expected 'local' or 'global'",
         pcall_err(api.nvim_get_option_value, 'scrolloff', { scope = 'bogus' })
@@ -1957,6 +1957,16 @@ describe('API', function()
       api.nvim_set_current_win(api.nvim_list_wins()[2])
       eq(api.nvim_list_wins()[2], api.nvim_get_current_win())
     end)
+
+    it('failure modes', function()
+      n.command('split')
+
+      eq('Invalid window id: 9999', pcall_err(api.nvim_set_current_win, 9999))
+
+      -- XXX: force nvim_set_current_win to fail somehow.
+      n.command("au WinLeave * throw 'foo'")
+      eq('WinLeave Autocommands for "*": foo', pcall_err(api.nvim_set_current_win, 1000))
+    end)
   end)
 
   describe('nvim_{get,set}_current_tabpage, nvim_list_tabpages', function()
@@ -1975,6 +1985,16 @@ describe('API', function()
       api.nvim_set_current_tabpage(api.nvim_list_tabpages()[2])
       eq(api.nvim_list_tabpages()[2], api.nvim_get_current_tabpage())
       eq(api.nvim_list_wins()[2], api.nvim_get_current_win())
+    end)
+
+    it('failure modes', function()
+      n.command('tabnew')
+
+      eq('Invalid tabpage id: 999', pcall_err(api.nvim_set_current_tabpage, 999))
+
+      -- XXX: force nvim_set_current_tabpage to fail somehow.
+      n.command("au TabLeave * throw 'foo'")
+      eq('TabLeave Autocommands for "*": foo', pcall_err(api.nvim_set_current_tabpage, 1))
     end)
   end)
 
@@ -2130,7 +2150,6 @@ describe('API', function()
 
     it('does not complete ("interrupt") `d` #3732', function()
       local screen = Screen.new(20, 4)
-      screen:attach()
       command('set listchars=eol:$')
       command('set list')
       feed('ia<cr>b<cr>c<cr><Esc>kkk')
@@ -2391,7 +2410,6 @@ describe('API', function()
 
     before_each(function()
       screen = Screen.new(40, 8)
-      screen:attach()
     end)
 
     it('prints long messages correctly #20534', function()
@@ -2461,7 +2479,6 @@ describe('API', function()
 
     before_each(function()
       screen = Screen.new(40, 8)
-      screen:attach()
     end)
 
     it('can show one line', function()
@@ -2543,7 +2560,6 @@ describe('API', function()
 
     before_each(function()
       screen = Screen.new(40, 8)
-      screen:attach()
     end)
 
     it('shows only one return prompt after all lines are shown', function()
@@ -2688,7 +2704,8 @@ describe('API', function()
       -- :terminal with args + running process.
       command('enew')
       local progpath_esc = eval('shellescape(v:progpath)')
-      fn.termopen(('%s -u NONE -i NONE'):format(progpath_esc), {
+      fn.jobstart(('%s -u NONE -i NONE'):format(progpath_esc), {
+        term = true,
         env = { VIMRUNTIME = os.getenv('VIMRUNTIME') },
       })
       eq(-1, eval('jobwait([&channel], 0)[0]')) -- Running?
@@ -3100,8 +3117,7 @@ describe('API', function()
       eq({}, api.nvim_list_uis())
     end)
     it('returns attached UIs', function()
-      local screen = Screen.new(20, 4)
-      screen:attach({ override = true })
+      local screen = Screen.new(20, 4, { override = true })
       local expected = {
         {
           chan = 1,
@@ -3129,8 +3145,7 @@ describe('API', function()
       eq(expected, api.nvim_list_uis())
 
       screen:detach()
-      screen = Screen.new(44, 99)
-      screen:attach({ rgb = false })
+      screen = Screen.new(44, 99, { rgb = false }) -- luacheck: ignore
       expected[1].rgb = false
       expected[1].override = false
       expected[1].width = 44
@@ -3165,7 +3180,6 @@ describe('API', function()
       eq(1, api.nvim_get_current_buf())
 
       local screen = Screen.new(20, 4)
-      screen:attach()
       api.nvim_buf_set_lines(2, 0, -1, true, { 'some text' })
       api.nvim_set_current_buf(2)
       screen:expect(
@@ -3229,7 +3243,6 @@ describe('API', function()
       eq(1, api.nvim_get_current_buf())
 
       local screen = Screen.new(20, 4)
-      screen:attach()
 
       --
       -- Editing a scratch-buffer does NOT change its properties.
@@ -3591,9 +3604,17 @@ describe('API', function()
 
     before_each(function()
       screen = Screen.new(40, 8)
-      screen:attach()
       command('highlight Statement gui=bold guifg=Brown')
       command('highlight Special guifg=SlateBlue')
+    end)
+
+    it('validation', function()
+      eq("Invalid 'chunk': expected Array, got String", pcall_err(api.nvim_echo, { 'msg' }, 1, {}))
+      eq(
+        'Invalid chunk: expected Array with 1 or 2 Strings',
+        pcall_err(api.nvim_echo, { { '', '', '' } }, 1, {})
+      )
+      eq('Invalid hl_group: text highlight', pcall_err(api.nvim_echo, { { '', false } }, 1, {}))
     end)
 
     it('should clear cmdline message before echo', function()
@@ -3618,6 +3639,18 @@ describe('API', function()
         ^                                        |
         {1:~                                       }|*6
         msg_a{15:msg_b}{16:msg_c}                         |
+      ]],
+      }
+      async_meths.nvim_echo({
+        { 'msg_d' },
+        { 'msg_e', api.nvim_get_hl_id_by_name('Statement') },
+        { 'msg_f', api.nvim_get_hl_id_by_name('Special') },
+      }, true, {})
+      screen:expect {
+        grid = [[
+        ^                                        |
+        {1:~                                       }|*6
+        msg_d{15:msg_e}{16:msg_f}                         |
       ]],
       }
     end)
@@ -3654,7 +3687,6 @@ describe('API', function()
 
     before_each(function()
       screen = Screen.new(100, 35)
-      screen:attach()
       screen:add_extra_attr_ids {
         [100] = { background = tonumber('0xffff40'), bg_indexed = true },
         [101] = {
@@ -3754,7 +3786,7 @@ describe('API', function()
       screen:expect {
         grid = [[
                                                           |
-        {1:~}{102: }{4:                                       }{1:         }|
+        {1:~}{4:^                                        }{1:         }|
         {1:~}{4:                                        }{1:         }|*4
         {1:~                                                 }|*3
         {5:-- TERMINAL --}                                    |
@@ -3770,7 +3802,7 @@ describe('API', function()
       screen:expect {
         grid = [[
                                                           |
-        {1:~}{4:herrejösses!}{102: }{4:                           }{1:         }|
+        {1:~}{4:herrejösses!^                            }{1:         }|
         {1:~}{4:                                        }{1:         }|*4
         {1:~                                                 }|*3
         {5:-- TERMINAL --}                                    |
@@ -3933,7 +3965,6 @@ describe('API', function()
       command('set readonly')
       eq({ str = '[RO]', width = 4 }, api.nvim_eval_statusline('%r', { maxwidth = 5 }))
       local screen = Screen.new(80, 24)
-      screen:attach()
       command('set showcmd')
       feed('1234')
       screen:expect({ any = '1234' })
@@ -4591,7 +4622,6 @@ describe('API', function()
     end)
     it('does not interfere with printing line in Ex mode #19400', function()
       local screen = Screen.new(60, 7)
-      screen:attach()
       insert([[
         foo
         bar]])
@@ -5048,7 +5078,6 @@ describe('API', function()
 
     it("doesn't display messages when output=true", function()
       local screen = Screen.new(40, 6)
-      screen:attach()
       api.nvim_cmd({ cmd = 'echo', args = { [['hello']] } }, { output = true })
       screen:expect {
         grid = [[
@@ -5131,7 +5160,6 @@ describe('API', function()
 
   it('nvim__redraw', function()
     local screen = Screen.new(60, 5)
-    screen:attach()
     eq('at least one action required', pcall_err(api.nvim__redraw, {}))
     eq('at least one action required', pcall_err(api.nvim__redraw, { buf = 0 }))
     eq('at least one action required', pcall_err(api.nvim__redraw, { win = 0 }))
@@ -5357,8 +5385,53 @@ describe('API', function()
         13                                                          |
       ]],
     })
-    -- takes buffer line count from correct buffer with "win" and {0, -1} "range"
-    api.nvim__redraw({ win = 0, range = { 0, -1 } })
+  end)
+
+  it('nvim__redraw range parameter', function()
+    Screen.new(10, 5)
+    fn.setline(1, fn.range(4))
+
+    exec_lua([[
+      _G.lines_list = {}
+      ns = vim.api.nvim_create_namespace('')
+      vim.api.nvim_set_decoration_provider(ns, {
+        on_win = function()
+        end,
+        on_line = function(_, _, _, line)
+          table.insert(_G.lines_list, line)
+        end,
+      })
+      function _G.get_lines()
+        local lines = _G.lines_list
+        _G.lines_list = {}
+        return lines
+      end
+    ]])
+
+    api.nvim__redraw({ flush = true, valid = false })
+    exec_lua('_G.get_lines()')
+
+    local actual_lines = {}
+    local function test(range)
+      api.nvim__redraw({ win = 0, range = range })
+      table.insert(actual_lines, exec_lua('return _G.get_lines()'))
+    end
+
+    test({ 0, -1 })
+    test({ 2, 2 ^ 31 })
+    test({ 2, 2 ^ 32 })
+    test({ 2 ^ 31 - 1, 2 })
+    test({ 2 ^ 32 - 1, 2 })
+
+    local expected_lines = {
+      { 0, 1, 2, 3 },
+      { 2, 3 },
+      { 2, 3 },
+      {},
+      {},
+    }
+    eq(expected_lines, actual_lines)
+
     n.assert_alive()
   end)
 end)

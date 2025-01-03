@@ -1,9 +1,7 @@
 #include <assert.h>
-#include <ctype.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -52,7 +50,6 @@
 #include "nvim/mark.h"
 #include "nvim/mark_defs.h"
 #include "nvim/match.h"
-#include "nvim/mbyte.h"
 #include "nvim/memory.h"
 #include "nvim/message.h"
 #include "nvim/mouse.h"
@@ -186,13 +183,13 @@ win_T *swbuf_goto_win_with_buf(buf_T *buf)
 
   // If 'switchbuf' contains "useopen": jump to first window in the current
   // tab page containing "buf" if one exists.
-  if (swb_flags & SWB_USEOPEN) {
+  if (swb_flags & kOptSwbFlagUseopen) {
     wp = buf_jump_open_win(buf);
   }
 
   // If 'switchbuf' contains "usetab": jump to first window in any tab page
   // containing "buf" if one exists.
-  if (wp == NULL && (swb_flags & SWB_USETAB)) {
+  if (wp == NULL && (swb_flags & kOptSwbFlagUsetab)) {
     wp = buf_jump_open_tab(buf);
   }
 
@@ -583,7 +580,7 @@ wingotofile:
       // If 'switchbuf' is set to 'useopen' or 'usetab' and the
       // file is already opened in a window, then jump to it.
       win_T *wp = NULL;
-      if ((swb_flags & (SWB_USEOPEN | SWB_USETAB))
+      if ((swb_flags & (kOptSwbFlagUseopen | kOptSwbFlagUsetab))
           && cmdmod.cmod_tab == 0) {
         wp = swbuf_goto_win_with_buf(buflist_findname_exp(ptr));
       }
@@ -746,40 +743,28 @@ void win_set_buf(win_T *win, buf_T *buf, Error *err)
   RedrawingDisabled++;
 
   switchwin_T switchwin;
-  if (switch_win_noblock(&switchwin, win, tab, true) == FAIL) {
-    api_set_error(err,
-                  kErrorTypeException,
-                  "Failed to switch to window %d",
-                  win->handle);
-    goto cleanup;
-  }
 
-  try_start();
+  TRY_WRAP(err, {
+    int win_result = switch_win_noblock(&switchwin, win, tab, true);
+    if (win_result != FAIL) {
+      const int save_acd = p_acd;
+      if (!switchwin.sw_same_win) {
+        // Temporarily disable 'autochdir' when setting buffer in another window.
+        p_acd = false;
+      }
 
-  const int save_acd = p_acd;
-  if (!switchwin.sw_same_win) {
-    // Temporarily disable 'autochdir' when setting buffer in another window.
-    p_acd = false;
-  }
+      do_buffer(DOBUF_GOTO, DOBUF_FIRST, FORWARD, buf->b_fnum, 0);
 
-  int result = do_buffer(DOBUF_GOTO, DOBUF_FIRST, FORWARD, buf->b_fnum, 0);
-
-  if (!switchwin.sw_same_win) {
-    p_acd = save_acd;
-  }
-
-  if (!try_end(err) && result == FAIL) {
-    api_set_error(err,
-                  kErrorTypeException,
-                  "Failed to set buffer %d",
-                  buf->handle);
-  }
+      if (!switchwin.sw_same_win) {
+        p_acd = save_acd;
+      }
+    }
+  });
 
   // If window is not current, state logic will not validate its cursor. So do it now.
   // Still needed if do_buffer returns FAIL (e.g: autocmds abort script after buffer was set).
   validate_cursor(curwin);
 
-cleanup:
   restore_win_noblock(&switchwin, true);
   RedrawingDisabled--;
 }
@@ -852,12 +837,18 @@ void ui_ext_win_position(win_T *wp, bool validate)
       }
     }
 
+    bool resort = wp->w_grid_alloc.comp_index != 0
+                  && wp->w_grid_alloc.zindex != wp->w_config.zindex;
+    bool raise = resort && wp->w_grid_alloc.zindex < wp->w_config.zindex;
     wp->w_grid_alloc.zindex = wp->w_config.zindex;
+    if (resort) {
+      ui_comp_layers_adjust(wp->w_grid_alloc.comp_index, raise);
+    }
     if (ui_has(kUIMultigrid)) {
       String anchor = cstr_as_string(float_anchor_str[c.anchor]);
       if (!c.hide) {
         ui_call_win_float_pos(wp->w_grid_alloc.handle, wp->handle, anchor,
-                              grid->handle, row, col, c.focusable,
+                              grid->handle, row, col, c.mouse,
                               wp->w_grid_alloc.zindex);
       } else {
         ui_call_win_hide(wp->w_grid_alloc.handle);
@@ -889,7 +880,7 @@ void ui_ext_win_position(win_T *wp, bool validate)
         ui_comp_put_grid(&wp->w_grid_alloc, comp_row, comp_col,
                          wp->w_height_outer, wp->w_width_outer, valid, false);
         ui_check_cursor_grid(wp->w_grid_alloc.handle);
-        wp->w_grid_alloc.focusable = wp->w_config.focusable;
+        wp->w_grid_alloc.mouse_enabled = wp->w_config.mouse;
         if (!valid) {
           wp->w_grid_alloc.valid = false;
           redraw_later(wp, UPD_NOT_VALID);
@@ -3448,13 +3439,13 @@ static frame_T *win_altframe(win_T *win, tabpage_T *tp)
 static tabpage_T *alt_tabpage(void)
 {
   // Use the last accessed tab page, if possible.
-  if ((tcl_flags & TCL_USELAST) && valid_tabpage(lastused_tabpage)) {
+  if ((tcl_flags & kOptTclFlagUselast) && valid_tabpage(lastused_tabpage)) {
     return lastused_tabpage;
   }
 
   // Use the next tab page, if possible.
   bool forward = curtab->tp_next != NULL
-                 && ((tcl_flags & TCL_LEFT) == 0 || curtab == first_tabpage);
+                 && ((tcl_flags & kOptTclFlagLeft) == 0 || curtab == first_tabpage);
 
   tabpage_T *tp;
   if (forward) {
@@ -4044,6 +4035,7 @@ void win_alloc_aucmd_win(int idx)
   fconfig.width = Columns;
   fconfig.height = 5;
   fconfig.focusable = false;
+  fconfig.mouse = false;
   aucmd_win[idx].auc_win = win_new_float(NULL, true, fconfig, &err);
   aucmd_win[idx].auc_win->w_buffer->b_nwindows--;
   RESET_BINDING(aucmd_win[idx].auc_win);
@@ -5168,8 +5160,8 @@ win_T *win_alloc(win_T *after, bool hidden)
   return new_wp;
 }
 
-// Free one wininfo_T.
-void free_wininfo(wininfo_T *wip, buf_T *bp)
+// Free one WinInfo.
+void free_wininfo(WinInfo *wip, buf_T *bp)
 {
   if (wip->wi_optset) {
     clear_winopt(&wip->wi_opt);
@@ -5234,30 +5226,24 @@ void win_free(win_T *wp, tabpage_T *tp)
   // Remove the window from the b_wininfo lists, it may happen that the
   // freed memory is re-used for another window.
   FOR_ALL_BUFFERS(buf) {
-    for (wininfo_T *wip = buf->b_wininfo; wip != NULL; wip = wip->wi_next) {
+    WinInfo *wip_wp = NULL;
+    size_t pos_null = kv_size(buf->b_wininfo);
+    for (size_t i = 0; i < kv_size(buf->b_wininfo); i++) {
+      WinInfo *wip = kv_A(buf->b_wininfo, i);
       if (wip->wi_win == wp) {
-        wininfo_T *wip2;
+        wip_wp = wip;
+      } else if (wip->wi_win == NULL) {
+        pos_null = i;
+      }
+    }
 
-        // If there already is an entry with "wi_win" set to NULL it
-        // must be removed, it would never be used.
-        // Skip "wip" itself, otherwise Coverity complains.
-        for (wip2 = buf->b_wininfo; wip2 != NULL; wip2 = wip2->wi_next) {
-          // `wip2 != wip` to satisfy Coverity. #14884
-          if (wip2 != wip && wip2->wi_win == NULL) {
-            if (wip2->wi_next != NULL) {
-              wip2->wi_next->wi_prev = wip2->wi_prev;
-            }
-            if (wip2->wi_prev == NULL) {
-              buf->b_wininfo = wip2->wi_next;
-            } else {
-              wip2->wi_prev->wi_next = wip2->wi_next;
-            }
-            free_wininfo(wip2, buf);
-            break;
-          }
-        }
-
-        wip->wi_win = NULL;
+    if (wip_wp) {
+      wip_wp->wi_win = NULL;
+      // If there already is an entry with "wi_win" set to NULL it
+      // must be removed, it would never be used.
+      if (pos_null < kv_size(buf->b_wininfo)) {
+        free_wininfo(kv_A(buf->b_wininfo, pos_null), buf);
+        kv_shift(buf->b_wininfo, pos_null, 1);
       }
     }
   }
@@ -6188,7 +6174,7 @@ const char *did_set_winminheight(optset_T *args FUNC_ATTR_UNUSED)
   // loop until there is a 'winminheight' that is possible
   while (p_wmh > 0) {
     const int room = Rows - (int)p_ch;
-    const int needed = min_rows();
+    const int needed = min_rows_for_all_tabpages();
     if (room >= needed) {
       break;
     }
@@ -6754,8 +6740,8 @@ void win_comp_scroll(win_T *wp)
 
   if (wp->w_p_scr != old_w_p_scr) {
     // Used by "verbose set scroll".
-    wp->w_p_script_ctx[WV_SCROLL].script_ctx.sc_sid = SID_WINLAYOUT;
-    wp->w_p_script_ctx[WV_SCROLL].script_ctx.sc_lnum = 0;
+    wp->w_p_script_ctx[kWinOptScroll].script_ctx.sc_sid = SID_WINLAYOUT;
+    wp->w_p_script_ctx[kWinOptScroll].script_ctx.sc_lnum = 0;
   }
 }
 
@@ -6813,11 +6799,13 @@ void command_height(void)
       // Recompute window positions.
       win_comp_pos();
 
-      // clear the lines added to cmdline
-      if (full_screen) {
-        grid_clear(&default_grid, cmdline_row, Rows, 0, Columns, 0);
+      if (!need_wait_return) {
+        // clear the lines added to cmdline
+        if (full_screen) {
+          grid_clear(&default_grid, cmdline_row, Rows, 0, Columns, 0);
+        }
+        msg_row = cmdline_row;
       }
-      msg_row = cmdline_row;
       redraw_cmdline = true;
       return;
     }
@@ -7062,8 +7050,24 @@ int last_stl_height(bool morewin)
 }
 
 /// Return the minimal number of rows that is needed on the screen to display
-/// the current number of windows.
-int min_rows(void)
+/// the current number of windows for the given tab page.
+int min_rows(tabpage_T *tp) FUNC_ATTR_NONNULL_ALL
+{
+  if (firstwin == NULL) {       // not initialized yet
+    return MIN_LINES;
+  }
+
+  int total = frame_minheight(tp->tp_topframe, NULL);
+  total += tabline_height() + global_stl_height();
+  if ((tp == curtab ? p_ch : tp->tp_ch_used) > 0) {
+    total++;  // count the room for the command line
+  }
+  return total;
+}
+
+/// Return the minimal number of rows that is needed on the screen to display
+/// the current number of windows for all tab pages.
+int min_rows_for_all_tabpages(void)
 {
   if (firstwin == NULL) {       // not initialized yet
     return MIN_LINES;
@@ -7072,12 +7076,12 @@ int min_rows(void)
   int total = 0;
   FOR_ALL_TABS(tp) {
     int n = frame_minheight(tp->tp_topframe, NULL);
+    if ((tp == curtab ? p_ch : tp->tp_ch_used) > 0) {
+      n++;  // count the room for the command line
+    }
     total = MAX(total, n);
   }
   total += tabline_height() + global_stl_height();
-  if (p_ch > 0) {
-    total += 1;           // count the room for the command line
-  }
   return total;
 }
 
@@ -7370,18 +7374,37 @@ static int int_cmp(const void *pa, const void *pb)
   return a == b ? 0 : a < b ? -1 : 1;
 }
 
-/// Handle setting 'colorcolumn' or 'textwidth' in window "wp".
+/// Check "cc" as 'colorcolumn' and update the members of "wp".
+/// This is called when 'colorcolumn' or 'textwidth' is changed.
+///
+/// @param cc  when NULL: use "wp->w_p_cc"
+/// @param wp  when NULL: only parse "cc"
 ///
 /// @return error message, NULL if it's OK.
-const char *check_colorcolumn(win_T *wp)
+const char *check_colorcolumn(char *cc, win_T *wp)
 {
-  if (wp->w_buffer == NULL) {
+  if (wp != NULL && wp->w_buffer == NULL) {
     return NULL;      // buffer was closed
+  }
+
+  char *s = empty_string_option;
+  if (cc != NULL) {
+    s = cc;
+  } else if (wp != NULL) {
+    s = wp->w_p_cc;
+  }
+
+  OptInt tw;
+  if (wp != NULL) {
+    tw = wp->w_buffer->b_p_tw;
+  } else {
+    // buffer-local value not set, assume zero
+    tw = 0;
   }
 
   unsigned count = 0;
   int color_cols[256];
-  for (char *s = wp->w_p_cc; *s != NUL && count < 255;) {
+  while (*s != NUL && count < 255) {
     int col;
     if (*s == '-' || *s == '+') {
       // -N and +N: add to 'textwidth'
@@ -7391,16 +7414,12 @@ const char *check_colorcolumn(win_T *wp)
         return e_invarg;
       }
       col = col * getdigits_int(&s, true, 0);
-      if (wp->w_buffer->b_p_tw == 0) {
+      if (tw == 0) {
         goto skip;          // 'textwidth' not set, skip this item
       }
-      assert((col >= 0
-              && wp->w_buffer->b_p_tw <= INT_MAX - col
-              && wp->w_buffer->b_p_tw + col >= INT_MIN)
-             || (col < 0
-                 && wp->w_buffer->b_p_tw >= INT_MIN - col
-                 && wp->w_buffer->b_p_tw + col <= INT_MAX));
-      col += (int)wp->w_buffer->b_p_tw;
+      assert((col >= 0 && tw <= INT_MAX - col && tw + col >= INT_MIN)
+             || (col < 0 && tw >= INT_MIN - col && tw + col <= INT_MAX));
+      col += (int)tw;
       if (col < 0) {
         goto skip;
       }
@@ -7420,6 +7439,10 @@ skip:
     if (*++s == NUL) {
       return e_invarg;        // illegal trailing comma as in "set cc=80,"
     }
+  }
+
+  if (wp == NULL) {
+    return NULL;  // only parse "cc"
   }
 
   xfree(wp->w_p_cc_cols);

@@ -13,7 +13,6 @@ local eq = t.eq
 local feed_data = tt.feed_data
 local clear = n.clear
 local command = n.command
-local dedent = t.dedent
 local exec = n.exec
 local exec_lua = n.exec_lua
 local testprg = n.testprg
@@ -60,7 +59,7 @@ describe('TUI', function()
       'colorscheme vim',
     })
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -87,11 +86,26 @@ describe('TUI', function()
     end)
   end
 
+  -- Ensure both child client and child server have processed pending events.
+  local function poke_both_eventloop()
+    child_exec_lua([[
+      _G.termresponse = nil
+      vim.api.nvim_create_autocmd('TermResponse', {
+        once = true,
+        callback = function(ev) _G.termresponse = ev.data end,
+      })
+    ]])
+    feed_data('\027P0$r\027\\')
+    retry(nil, nil, function()
+      eq('\027P0$r', child_exec_lua('return _G.termresponse'))
+    end)
+  end
+
   it('rapid resize #7572 #7628', function()
     -- Need buffer rows to provoke the behavior.
     feed_data(':edit test/functional/fixtures/bigfile.txt\n')
     screen:expect([[
-      {1:0}000;<control>;Cc;0;BN;;;;;N;NULL;;;;             |
+      ^0000;<control>;Cc;0;BN;;;;;N;NULL;;;;             |
       0001;<control>;Cc;0;BN;;;;;N;START OF HEADING;;;; |
       0002;<control>;Cc;0;BN;;;;;N;START OF TEXT;;;;    |
       0003;<control>;Cc;0;BN;;;;;N;END OF TEXT;;;;      |
@@ -141,7 +155,7 @@ describe('TUI', function()
       {8:FAIL 0}                                            |
       {8:FAIL 1}                                            |
       {8:FAIL 2}                                            |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -156,7 +170,7 @@ describe('TUI', function()
       {8:FAIL 1}                                            |
       {8:FAIL 2}                                            |
                                                         |*2
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -172,7 +186,7 @@ describe('TUI', function()
       {8:FAIL 3}                                            |
       {8:FAIL 4}                                            |
       {8:FAIL 5}                                            |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -185,7 +199,7 @@ describe('TUI', function()
       {8:FAIL 3}                                            |
       {8:FAIL 4}                                            |
       {8:FAIL 5}                                            |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -196,7 +210,7 @@ describe('TUI', function()
       {8:FAIL 3}                                            |
       {8:FAIL 4}                                            |
       {8:FAIL 5}                                            |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -207,7 +221,7 @@ describe('TUI', function()
       :call ManyErr()                                   |
       {8:Error detected while processing function ManyErr:} |
       {11:line    2:}                                        |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -223,7 +237,7 @@ describe('TUI', function()
       {8:FAIL 2}                                            |
       {8:FAIL 3}                                            |
       {8:FAIL 4}                                            |
-      {10:-- More --}{1: }                                       |
+      {10:-- More --}^                                        |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -231,7 +245,7 @@ describe('TUI', function()
     feed_data('\003')
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*6
       {5:[No Name]                                         }|
                                                         |
@@ -245,7 +259,7 @@ describe('TUI', function()
     screen:expect([[
       abc                                               |
       test1                                             |
-      test2{1: }                                            |
+      test2^                                             |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -255,7 +269,7 @@ describe('TUI', function()
     screen:expect([[
       abc                                               |
       test1                                             |
-      test{1:2}                                             |
+      test^2                                             |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
                                                         |
@@ -273,14 +287,14 @@ describe('TUI', function()
       alt-j                                             |
       alt-k                                             |
       alt-l                                             |
-      {1: }                                                 |
+      ^                                                  |
       {5:[No Name] [+]                                     }|
                                                         |
       {3:-- TERMINAL --}                                    |
     ]])
     feed_data('gg')
     screen:expect([[
-      {1:a}lt-d                                             |
+      ^alt-d                                             |
       alt-f                                             |
       alt-g                                             |
       alt-h                                             |
@@ -295,7 +309,7 @@ describe('TUI', function()
     -- ALT+j inserts "ê". Nvim does not (#3982).
     feed_data('i\022\027j')
     screen:expect([[
-      <M-j>{1: }                                            |
+      <M-j>^                                             |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -315,7 +329,7 @@ describe('TUI', function()
     )
     feed_data('\027[27u;')
     screen:expect([[
-      ESCsemicolo{1:n}                                      |
+      ESCsemicolo^n                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -329,7 +343,7 @@ describe('TUI', function()
   it('interprets <Esc><Nul> as <M-C-Space> #17198', function()
     feed_data('i\022\027\000')
     screen:expect([[
-      <M-C-Space>{1: }                                      |
+      <M-C-Space>^                                       |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -343,7 +357,7 @@ describe('TUI', function()
     feed_data('\022\022') -- ctrl+v
     feed_data('\022\013') -- ctrl+m
     screen:expect([[
-      {6:^G^V^M}{1: }                                           |
+      {6:^G^V^M}^                                            |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -362,7 +376,7 @@ describe('TUI', function()
       {}
     )
     screen:expect([[
-      {11:  1 }{1:0}----1----2----3----4│{11:  1 }0----1----2----3----|
+      {11:  1 }^0----1----2----3----4│{11:  1 }0----1----2----3----|
       {11:  2 }0----1----2----3----4│{11:  2 }0----1----2----3----|
       {11:  3 }0----1----2----3----4│{11:  3 }0----1----2----3----|
       {11:  4 }0----1----2----3----4│{11:  4 }0----1----2----3----|
@@ -377,7 +391,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'down', '', 0, 0, 7)
     end
     screen:expect([[
-      {11:  2 }{1:0}----1----2----3----4│{11:  1 }0----1----2----3----|
+      {11:  2 }^0----1----2----3----4│{11:  1 }0----1----2----3----|
       {11:  3 }0----1----2----3----4│{11:  2 }0----1----2----3----|
       {11:  4 }0----1----2----3----4│{11:  3 }0----1----2----3----|
       {11:  5 }0----1----2----3----4│{11:  4 }0----1----2----3----|
@@ -392,7 +406,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'down', '', 0, 0, 47)
     end
     screen:expect([[
-      {11:  2 }{1:0}----1----2----3----4│{11:  2 }0----1----2----3----|
+      {11:  2 }^0----1----2----3----4│{11:  2 }0----1----2----3----|
       {11:  3 }0----1----2----3----4│{11:  3 }0----1----2----3----|
       {11:  4 }0----1----2----3----4│{11:  4 }0----1----2----3----|
       {11:  5 }0----1----2----3----4│{11:  5 }0----1----2----3----|
@@ -407,7 +421,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'right', '', 0, 0, 7)
     end
     screen:expect([[
-      {11:  2 }{1:-}---1----2----3----4-│{11:  2 }0----1----2----3----|
+      {11:  2 }^----1----2----3----4-│{11:  2 }0----1----2----3----|
       {11:  3 }----1----2----3----4-│{11:  3 }0----1----2----3----|
       {11:  4 }----1----2----3----4-│{11:  4 }0----1----2----3----|
       {11:  5 }----1----2----3----4-│{11:  5 }0----1----2----3----|
@@ -422,7 +436,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'right', '', 0, 0, 47)
     end
     screen:expect([[
-      {11:  2 }{1:-}---1----2----3----4-│{11:  2 }----1----2----3----4|
+      {11:  2 }^----1----2----3----4-│{11:  2 }----1----2----3----4|
       {11:  3 }----1----2----3----4-│{11:  3 }----1----2----3----4|
       {11:  4 }----1----2----3----4-│{11:  4 }----1----2----3----4|
       {11:  5 }----1----2----3----4-│{11:  5 }----1----2----3----4|
@@ -437,7 +451,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'down', 'S', 0, 0, 7)
     end
     screen:expect([[
-      {11:  5 }{1:-}---1----2----3----4-│{11:  2 }----1----2----3----4|
+      {11:  5 }^----1----2----3----4-│{11:  2 }----1----2----3----4|
       {11:  6 }----1----2----3----4-│{11:  3 }----1----2----3----4|
       {11:  7 }----1----2----3----4-│{11:  4 }----1----2----3----4|
       {11:  8 }----1----2----3----4-│{11:  5 }----1----2----3----4|
@@ -452,7 +466,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'down', 'S', 0, 0, 47)
     end
     screen:expect([[
-      {11:  5 }{1:-}---1----2----3----4-│{11:  5 }----1----2----3----4|
+      {11:  5 }^----1----2----3----4-│{11:  5 }----1----2----3----4|
       {11:  6 }----1----2----3----4-│{11:  6 }----1----2----3----4|
       {11:  7 }----1----2----3----4-│{11:  7 }----1----2----3----4|
       {11:  8 }----1----2----3----4-│{11:  8 }----1----2----3----4|
@@ -467,7 +481,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'right', 'S', 0, 0, 7)
     end
     screen:expect([[
-      {11:  5 }{1:-}---6----7----8----9 │{11:  5 }----1----2----3----4|
+      {11:  5 }^----6----7----8----9 │{11:  5 }----1----2----3----4|
       {11:  6 }----6----7----8----9 │{11:  6 }----1----2----3----4|
       {11:  7 }----6----7----8----9 │{11:  7 }----1----2----3----4|
       {11:  8 }----6----7----8----9 │{11:  8 }----1----2----3----4|
@@ -482,7 +496,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'right', 'S', 0, 0, 47)
     end
     screen:expect([[
-      {11:  5 }{1:-}---6----7----8----9 │{11:  5 }5----6----7----8----|
+      {11:  5 }^----6----7----8----9 │{11:  5 }5----6----7----8----|
       {11:  6 }----6----7----8----9 │{11:  6 }5----6----7----8----|
       {11:  7 }----6----7----8----9 │{11:  7 }5----6----7----8----|
       {11:  8 }----6----7----8----9 │{11:  8 }5----6----7----8----|
@@ -498,7 +512,7 @@ describe('TUI', function()
     end
     screen:expect([[
       {11:  4 }----6----7----8----9 │{11:  5 }5----6----7----8----|
-      {11:  5 }{1:-}---6----7----8----9 │{11:  6 }5----6----7----8----|
+      {11:  5 }^----6----7----8----9 │{11:  6 }5----6----7----8----|
       {11:  6 }----6----7----8----9 │{11:  7 }5----6----7----8----|
       {11:  7 }----6----7----8----9 │{11:  8 }5----6----7----8----|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
@@ -513,7 +527,7 @@ describe('TUI', function()
     end
     screen:expect([[
       {11:  4 }----6----7----8----9 │{11:  4 }5----6----7----8----|
-      {11:  5 }{1:-}---6----7----8----9 │{11:  5 }5----6----7----8----|
+      {11:  5 }^----6----7----8----9 │{11:  5 }5----6----7----8----|
       {11:  6 }----6----7----8----9 │{11:  6 }5----6----7----8----|
       {11:  7 }----6----7----8----9 │{11:  7 }5----6----7----8----|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
@@ -528,7 +542,7 @@ describe('TUI', function()
     end
     screen:expect([[
       {11:  4 }5----6----7----8----9│{11:  4 }5----6----7----8----|
-      {11:  5 }5{1:-}---6----7----8----9│{11:  5 }5----6----7----8----|
+      {11:  5 }5^----6----7----8----9│{11:  5 }5----6----7----8----|
       {11:  6 }5----6----7----8----9│{11:  6 }5----6----7----8----|
       {11:  7 }5----6----7----8----9│{11:  7 }5----6----7----8----|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
@@ -543,7 +557,7 @@ describe('TUI', function()
     end
     screen:expect([[
       {11:  4 }5----6----7----8----9│{11:  4 }-5----6----7----8---|
-      {11:  5 }5{1:-}---6----7----8----9│{11:  5 }-5----6----7----8---|
+      {11:  5 }5^----6----7----8----9│{11:  5 }-5----6----7----8---|
       {11:  6 }5----6----7----8----9│{11:  6 }-5----6----7----8---|
       {11:  7 }5----6----7----8----9│{11:  7 }-5----6----7----8---|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
@@ -560,7 +574,7 @@ describe('TUI', function()
       {11:  1 }5----6----7----8----9│{11:  4 }-5----6----7----8---|
       {11:  2 }5----6----7----8----9│{11:  5 }-5----6----7----8---|
       {11:  3 }5----6----7----8----9│{11:  6 }-5----6----7----8---|
-      {11:  4 }5{1:-}---6----7----8----9│{11:  7 }-5----6----7----8---|
+      {11:  4 }5^----6----7----8----9│{11:  7 }-5----6----7----8---|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -575,7 +589,7 @@ describe('TUI', function()
       {11:  1 }5----6----7----8----9│{11:  1 }-5----6----7----8---|
       {11:  2 }5----6----7----8----9│{11:  2 }-5----6----7----8---|
       {11:  3 }5----6----7----8----9│{11:  3 }-5----6----7----8---|
-      {11:  4 }5{1:-}---6----7----8----9│{11:  4 }-5----6----7----8---|
+      {11:  4 }5^----6----7----8----9│{11:  4 }-5----6----7----8---|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -590,7 +604,7 @@ describe('TUI', function()
       {11:  1 }0----1----2----3----4│{11:  1 }-5----6----7----8---|
       {11:  2 }0----1----2----3----4│{11:  2 }-5----6----7----8---|
       {11:  3 }0----1----2----3----4│{11:  3 }-5----6----7----8---|
-      {11:  4 }0----1----2----3----{1:4}│{11:  4 }-5----6----7----8---|
+      {11:  4 }0----1----2----3----^4│{11:  4 }-5----6----7----8---|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -605,7 +619,7 @@ describe('TUI', function()
       {11:  1 }0----1----2----3----4│{11:  1 }0----1----2----3----|
       {11:  2 }0----1----2----3----4│{11:  2 }0----1----2----3----|
       {11:  3 }0----1----2----3----4│{11:  3 }0----1----2----3----|
-      {11:  4 }0----1----2----3----{1:4}│{11:  4 }0----1----2----3----|
+      {11:  4 }0----1----2----3----^4│{11:  4 }0----1----2----3----|
       {5:[No Name] [+]             }{1:[No Name] [+]           }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -646,7 +660,7 @@ describe('TUI', function()
       api.nvim_input_mouse('right', 'press', '', 0, 0, 4)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~  }{13: foo }{4:                                          }|
       {4:~  }{13: bar }{4:                                          }|
       {4:~  }{13: baz }{4:                                          }|
@@ -666,7 +680,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'up', '', 0, 0, 4)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~  }{14: foo }{4:                                          }|
       {4:~  }{13: bar }{4:                                          }|
       {4:~  }{13: baz }{4:                                          }|
@@ -680,7 +694,7 @@ describe('TUI', function()
       api.nvim_input_mouse('move', '', '', 0, 3, 6)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~  }{13: foo }{4:                                          }|
       {4:~  }{13: bar }{4:                                          }|
       {4:~  }{14: baz }{4:                                          }|
@@ -694,7 +708,7 @@ describe('TUI', function()
       api.nvim_input_mouse('wheel', 'down', '', 0, 3, 6)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~  }{13: foo }{4:                                          }|
       {4:~  }{14: bar }{4:                                          }|
       {4:~  }{13: baz }{4:                                          }|
@@ -708,7 +722,7 @@ describe('TUI', function()
       api.nvim_input_mouse('left', 'press', '', 0, 2, 6)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       :let g:menustr = 'bar'                            |
@@ -726,7 +740,7 @@ describe('TUI', function()
       api.nvim_input_mouse('right', 'press', '', 0, 2, 44)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~                                                 }|*2
       {4:~                                          }{13: foo }{4:  }|
       {5:[No Name] [+]                              }{13: bar }{5:  }|
@@ -739,7 +753,7 @@ describe('TUI', function()
       api.nvim_input_mouse('right', 'drag', '', 0, 5, 47)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~                                                 }|*2
       {4:~                                          }{13: foo }{4:  }|
       {5:[No Name] [+]                              }{13: bar }{5:  }|
@@ -752,7 +766,7 @@ describe('TUI', function()
       api.nvim_input_mouse('right', 'release', '', 0, 5, 47)
     end
     screen:expect([[
-      {1:p}opup menu test                                   |
+      ^popup menu test                                   |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       :let g:menustr = 'baz'                            |
@@ -791,7 +805,7 @@ describe('TUI', function()
     feed_data(fn.nr2char(57415)) -- KP_EQUAL
     screen:expect([[
       0123456789./*-+                                   |
-      ={1: }                                                |
+      =^                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -800,7 +814,7 @@ describe('TUI', function()
     feed_data(fn.nr2char(57417)) -- KP_LEFT
     screen:expect([[
       0123456789./*-+                                   |
-      {1:=}                                                 |
+      ^=                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -809,7 +823,7 @@ describe('TUI', function()
     feed_data(fn.nr2char(57418)) -- KP_RIGHT
     screen:expect([[
       0123456789./*-+                                   |
-      ={1: }                                                |
+      =^                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -817,7 +831,7 @@ describe('TUI', function()
     ]])
     feed_data(fn.nr2char(57419)) -- KP_UP
     screen:expect([[
-      0{1:1}23456789./*-+                                   |
+      0^123456789./*-+                                   |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -827,7 +841,7 @@ describe('TUI', function()
     feed_data(fn.nr2char(57420)) -- KP_DOWN
     screen:expect([[
       0123456789./*-+                                   |
-      ={1: }                                                |
+      =^                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -836,7 +850,7 @@ describe('TUI', function()
     feed_data(fn.nr2char(57425)) -- KP_INSERT
     screen:expect([[
       0123456789./*-+                                   |
-      ={1: }                                                |
+      =^                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- REPLACE --}                                     |
@@ -845,7 +859,7 @@ describe('TUI', function()
     feed_data('\027[27u') -- ESC
     screen:expect([[
       0123456789./*-+                                   |
-      {1:=}                                                 |
+      ^=                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
                                                         |
@@ -853,7 +867,7 @@ describe('TUI', function()
     ]])
     feed_data('\027[57417;5u') -- CTRL + KP_LEFT
     screen:expect([[
-      {1:0}123456789./*-+                                   |
+      ^0123456789./*-+                                   |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -862,7 +876,7 @@ describe('TUI', function()
     ]])
     feed_data('\027[57418;2u') -- SHIFT + KP_RIGHT
     screen:expect([[
-      0123456789{1:.}/*-+                                   |
+      0123456789^./*-+                                   |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -871,7 +885,7 @@ describe('TUI', function()
     ]])
     feed_data(fn.nr2char(57426)) -- KP_DELETE
     screen:expect([[
-      0123456789{1:/}*-+                                    |
+      0123456789^/*-+                                    |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -880,7 +894,7 @@ describe('TUI', function()
     ]])
     feed_data(fn.nr2char(57423)) -- KP_HOME
     screen:expect([[
-      {1:0}123456789/*-+                                    |
+      ^0123456789/*-+                                    |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -889,7 +903,7 @@ describe('TUI', function()
     ]])
     feed_data(fn.nr2char(57424)) -- KP_END
     screen:expect([[
-      0123456789/*-{1:+}                                    |
+      0123456789/*-^+                                    |
       =                                                 |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -907,7 +921,7 @@ describe('TUI', function()
     )
     screen:expect([[
       {12: + [No Name]  + [No Name] }{3: [No Name] }{1:            }{12:X}|
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*2
       {5:[No Name]                                         }|
                                                         |
@@ -916,7 +930,7 @@ describe('TUI', function()
     feed_data('\027[57421;5u') -- CTRL + KP_PAGE_UP
     screen:expect([[
       {12: + [No Name] }{3: + [No Name] }{12: [No Name] }{1:            }{12:X}|
-      0123456789/*-{1:+}                                    |
+      0123456789/*-^+                                    |
       =                                                 |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
@@ -926,7 +940,7 @@ describe('TUI', function()
     feed_data('\027[57422;5u') -- CTRL + KP_PAGE_DOWN
     screen:expect([[
       {12: + [No Name]  + [No Name] }{3: [No Name] }{1:            }{12:X}|
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*2
       {5:[No Name]                                         }|
                                                         |
@@ -947,7 +961,7 @@ describe('TUI', function()
     feed_data('\022\027[57379;48u') -- Shift + Alt + Ctrl + Super + Meta + F16
     screen:expect([[
       <D-j><T-k><T-D-CR><M-T-C-S-D-BS>                  |
-      <D-F13><T-F14><T-D-F15><M-T-C-S-D-F16>{1: }           |
+      <D-F13><T-F14><T-D-F15><M-T-C-S-D-F16>^            |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -959,7 +973,7 @@ describe('TUI', function()
     -- "bracketed paste"
     feed_data('i""\027i\027[200~')
     screen:expect([[
-      "{1:"}                                                |
+      "^"                                                |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -968,18 +982,19 @@ describe('TUI', function()
     feed_data('pasted from terminal')
     expect_child_buf_lines({ '"pasted from terminal"' })
     screen:expect([[
-      "pasted from terminal{1:"}                            |
+      "pasted from terminal^"                            |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
       {3:-- TERMINAL --}                                    |
     ]])
     feed_data('\027[201~') -- End paste.
+    poke_both_eventloop()
     screen:expect_unchanged()
     feed_data('\027[27u') -- ESC: go to Normal mode.
     wait_for_mode('n')
     screen:expect([[
-      "pasted from termina{1:l}"                            |
+      "pasted from termina^l"                            |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -990,7 +1005,7 @@ describe('TUI', function()
     expect_child_buf_lines({ '"pasted from terminapasted from terminalpasted from terminall"' })
     screen:expect([[
       "pasted from terminapasted from terminalpasted fro|
-      m termina{1:l}l"                                      |
+      m termina^ll"                                      |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
                                                         |
@@ -1012,7 +1027,7 @@ describe('TUI', function()
       this is line 1                                    |
       this is line 2                                    |
       line 3 is here                                    |
-      {1: }                                                 |
+      ^                                                  |
       {5:[No Name] [+]                                     }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -1022,7 +1037,7 @@ describe('TUI', function()
     screen:expect([[
       this{16: is line 1}                                    |
       {16:this is line 2}                                    |
-      {16:line}{1: }3 is here                                    |
+      {16:line}^ 3 is here                                    |
                                                         |
       {5:[No Name] [+]                                     }|
       {3:-- SELECT --}                                      |
@@ -1032,7 +1047,7 @@ describe('TUI', function()
     feed_data('just paste it™')
     feed_data('\027[201~')
     screen:expect([[
-      thisjust paste it{1:™}3 is here                       |
+      thisjust paste it^™3 is here                       |
                                                         |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
@@ -1069,7 +1084,7 @@ describe('TUI', function()
     feed_data('i')
     screen:expect([[
       tty ready                                         |
-      {1: }                                                 |
+      ^                                                  |
                                                         |*2
       {19:^^^^^^^                                           }|
       {3:-- TERMINAL --}                                    |*2
@@ -1079,7 +1094,7 @@ describe('TUI', function()
     feed_data('\027[201~')
     screen:expect([[
       tty ready                                         |
-      hallo{1: }                                            |
+      hallo^                                             |
                                                         |*2
       {19:^^^^^^^                                           }|
       {3:-- TERMINAL --}                                    |*2
@@ -1096,7 +1111,7 @@ describe('TUI', function()
     local expected_grid1 = [[
       line 1                                            |
       ESC:{6:^[} / CR:                                      |
-      {1:x}                                                 |
+      ^x                                                 |
       {4:~                                                 }|
       {5:[No Name] [+]                   3,1            All}|
                                                         |
@@ -1111,7 +1126,7 @@ describe('TUI', function()
       ESC:{6:^[} / CR:                                      |
       xline 1                                           |
       ESC:{6:^[} / CR:                                      |
-      {1:x}                                                 |
+      ^x                                                 |
       {5:[No Name] [+]                   5,1            Bot}|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -1150,20 +1165,21 @@ describe('TUI', function()
                                                         |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
-      :"{1:"}                                               |
+      :"^"                                               |
       {3:-- TERMINAL --}                                    |
     ]])
     -- "bracketed paste"
     feed_data('\027[200~line 1\nline 2\n')
     wait_for_mode('c')
     feed_data('line 3\nline 4\n\027[201~')
+    poke_both_eventloop()
     wait_for_mode('c')
     screen:expect([[
       foo                                               |
                                                         |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
-      :"line 1{1:"}                                         |
+      :"line 1^"                                         |
       {3:-- TERMINAL --}                                    |
     ]])
     -- Dot-repeat/redo.
@@ -1172,7 +1188,7 @@ describe('TUI', function()
     feed_data('.')
     screen:expect([[
       foo                                               |*2
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
                                                         |
@@ -1201,28 +1217,25 @@ describe('TUI', function()
     expect_cmdline('"stuff 1 more"')
     -- End the paste sequence.
     feed_data('\027[201~')
+    poke_both_eventloop()
     expect_cmdline('"stuff 1 more"')
     feed_data(' typed')
     expect_cmdline('"stuff 1 more typed"')
   end)
 
   it('paste: recovers from vim.paste() failure', function()
-    child_session:request(
-      'nvim_exec_lua',
-      [[
+    child_exec_lua([[
       _G.save_paste_fn = vim.paste
       -- Stack traces for this test are non-deterministic, so disable them
       _G.debug.traceback = function(msg) return msg end
       vim.paste = function(lines, phase) error("fake fail") end
-    ]],
-      {}
-    )
+    ]])
     -- Prepare something for dot-repeat/redo.
     feed_data('ifoo\n\027[27u')
     wait_for_mode('n')
     screen:expect([[
       foo                                               |
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
                                                         |
@@ -1236,7 +1249,7 @@ describe('TUI', function()
       {5:                                                  }|
       {8:paste: Error executing lua: [string "<nvim>"]:4: f}|
       {8:ake fail}                                          |
-      {10:Press ENTER or type command to continue}{1: }          |
+      {10:Press ENTER or type command to continue}^           |
       {3:-- TERMINAL --}                                    |
     ]])
     -- Remaining chunks are discarded after vim.paste() failure.
@@ -1252,7 +1265,7 @@ describe('TUI', function()
     feed_data('.')
     screen:expect([[
       foo                                               |*2
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
                                                         |
@@ -1262,20 +1275,20 @@ describe('TUI', function()
     feed_data('ityped input...\027[27u')
     screen:expect([[
       foo                                               |*2
-      typed input..{1:.}                                    |
+      typed input..^.                                    |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
                                                         |
       {3:-- TERMINAL --}                                    |
     ]])
     -- Paste works if vim.paste() succeeds.
-    child_session:request('nvim_exec_lua', [[vim.paste = _G.save_paste_fn]], {})
+    child_exec_lua([[vim.paste = _G.save_paste_fn]])
     feed_data('\027[200~line A\nline B\n\027[201~')
     screen:expect([[
       foo                                               |
       typed input...line A                              |
       line B                                            |
-      {1: }                                                 |
+      ^                                                  |
       {5:[No Name] [+]                                     }|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -1285,13 +1298,9 @@ describe('TUI', function()
   it('paste: vim.paste() cancel (retval=false) #10865', function()
     -- This test only exercises the "cancel" case.  Use-case would be "dangling
     -- paste", but that is not implemented yet. #10865
-    child_session:request(
-      'nvim_exec_lua',
-      [[
+    child_exec_lua([[
       vim.paste = function(lines, phase) return false end
-    ]],
-      {}
-    )
+    ]])
     feed_data('\027[200~line A\nline B\n\027[201~')
     expect_child_buf_lines({ '' })
     feed_data('ifoo\n\027[27u')
@@ -1299,22 +1308,18 @@ describe('TUI', function()
   end)
 
   it('paste: vim.paste() cancel (retval=false) with streaming #30462', function()
-    child_session:request(
-      'nvim_exec_lua',
-      [[
-        vim.paste = (function(overridden)
-          return function(lines, phase)
-            for i, line in ipairs(lines) do
-              if line:find('!') then
-                return false
-              end
+    child_exec_lua([[
+      vim.paste = (function(overridden)
+        return function(lines, phase)
+          for i, line in ipairs(lines) do
+            if line:find('!') then
+              return false
             end
-            return overridden(lines, phase)
           end
-        end)(vim.paste)
-      ]],
-      {}
-    )
+          return overridden(lines, phase)
+        end
+      end)(vim.paste)
+    ]])
     feed_data('A')
     wait_for_mode('i')
     feed_data('\027[200~aaa')
@@ -1324,6 +1329,7 @@ describe('TUI', function()
     feed_data('ccc!') -- This chunk is cancelled.
     expect_child_buf_lines({ 'aaabbb' })
     feed_data('ddd\027[201~') -- This chunk is ignored.
+    poke_both_eventloop()
     expect_child_buf_lines({ 'aaabbb' })
     feed_data('\027[27u')
     wait_for_mode('n')
@@ -1334,15 +1340,11 @@ describe('TUI', function()
   end)
 
   it("paste: 'nomodifiable' buffer", function()
-    child_session:request('nvim_command', 'set nomodifiable')
-    child_session:request(
-      'nvim_exec_lua',
-      [[
+    child_exec_lua([[
+      vim.bo.modifiable = false
       -- Truncate the error message to hide the line number
       _G.debug.traceback = function(msg) return msg:sub(-49) end
-    ]],
-      {}
-    )
+    ]])
     feed_data('\027[200~fail 1\nfail 2\n\027[201~')
     screen:expect([[
                                                         |
@@ -1350,16 +1352,16 @@ describe('TUI', function()
       {5:                                                  }|
       {8:paste: Error executing lua: Vim:E21: Cannot make c}|
       {8:hanges, 'modifiable' is off}                       |
-      {10:Press ENTER or type command to continue}{1: }          |
+      {10:Press ENTER or type command to continue}^           |
       {3:-- TERMINAL --}                                    |
     ]])
     feed_data('\n') -- <Enter> to dismiss hit-enter prompt
-    child_session:request('nvim_command', 'set modifiable')
+    child_exec_lua('vim.bo.modifiable = true')
     feed_data('\027[200~success 1\nsuccess 2\n\027[201~')
     screen:expect([[
       success 1                                         |
       success 2                                         |
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|
       {5:[No Name] [+]                                     }|
                                                         |
@@ -1378,7 +1380,7 @@ describe('TUI', function()
     expected = expected .. ' end'
     screen:expect([[
       zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz|
-      zzzzzzzzzzzzzz end{1: }                               |
+      zzzzzzzzzzzzzz end^                                |
       {4:~                                                 }|*2
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -1397,7 +1399,7 @@ describe('TUI', function()
                                                         |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
-      :<{1: }                                               |
+      :<^                                                |
       {3:-- TERMINAL --}                                    |
     ]])
   end)
@@ -1418,7 +1420,7 @@ describe('TUI', function()
       item 2997                                         |
       item 2998                                         |
       item 2999                                         |
-      item 3000 end{1: }                                    |
+      item 3000 end^                                     |
       {5:[No Name] [+]                   3000,14        Bot}|
       {3:-- INSERT --}                                      |
       {3:-- TERMINAL --}                                    |
@@ -1431,7 +1433,7 @@ describe('TUI', function()
       item 2997                                         |
       item 2998                                         |
       item 2999                                         |
-      item 3000 en{1:d}d                                    |
+      item 3000 en^dd                                    |
       {5:[No Name] [+]                   5999,13        Bot}|
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -1455,7 +1457,7 @@ describe('TUI', function()
                                                         |
       pasted from terminal (1)                          |
       {6:^[}[200~                                           |
-      {1: }                                                 |
+      ^                                                  |
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
       {3:-- TERMINAL --}                                    |
@@ -1470,7 +1472,7 @@ describe('TUI', function()
     -- Send "stop paste" sequence.
     feed_data('\027[201~')
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       {3:-- INSERT --}                                      |
@@ -1485,7 +1487,7 @@ describe('TUI', function()
     feed_data('\027[2')
     feed_data('00~pasted from terminal\027[201~')
     screen:expect([[
-      pasted from terminal{1: }                             |
+      pasted from terminal^                              |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -1500,7 +1502,7 @@ describe('TUI', function()
     feed_data('\027[200~pasted from terminal\027[20')
     feed_data('1~')
     screen:expect([[
-      pasted from terminal{1: }                             |
+      pasted from terminal^                              |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -1509,9 +1511,7 @@ describe('TUI', function()
   end)
 
   it('paste: streamed paste with isolated "stop paste" code', function()
-    child_session:request(
-      'nvim_exec_lua',
-      [[
+    child_exec_lua([[
       _G.paste_phases = {}
       vim.paste = (function(overridden)
         return function(lines, phase)
@@ -1519,14 +1519,12 @@ describe('TUI', function()
           overridden(lines, phase)
         end
       end)(vim.paste)
-    ]],
-      {}
-    )
+    ]])
     feed_data('i')
     wait_for_mode('i')
     feed_data('\027[200~pasted') -- phase 1
     screen:expect([[
-      pasted{1: }                                           |
+      pasted^                                            |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -1534,7 +1532,7 @@ describe('TUI', function()
     ]])
     feed_data(' from terminal') -- phase 2
     screen:expect([[
-      pasted from terminal{1: }                             |
+      pasted from terminal^                              |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -1542,8 +1540,9 @@ describe('TUI', function()
     ]])
     -- Send isolated "stop paste" sequence.
     feed_data('\027[201~') -- phase 3
+    poke_both_eventloop()
     screen:expect_unchanged()
-    local _, rv = child_session:request('nvim_exec_lua', [[return _G.paste_phases]], {})
+    local rv = child_exec_lua('return _G.paste_phases')
     -- In rare cases there may be multiple chunks of phase 2 because of timing.
     eq({ 1, 2, 3 }, { rv[1], rv[2], rv[#rv] })
   end)
@@ -1569,7 +1568,7 @@ describe('TUI', function()
     feed_data('\028\014') -- crtl+\ ctrl+N
     feed_data(':set termguicolors?\n')
     screen:expect([[
-      {5:^}{6:G}                                                |
+      {6:^^G}                                                |
       {2:~                                                 }|*3
       {3:[No Name] [+]                                     }|
       notermguicolors                                   |
@@ -1578,7 +1577,7 @@ describe('TUI', function()
 
     feed_data(':set termguicolors\n')
     screen:expect([[
-      {7:^}{8:G}                                                |
+      {8:^^G}                                                |
       {9:~}{10:                                                 }|*3
       {3:[No Name] [+]                                     }|
       :set termguicolors                                |
@@ -1587,7 +1586,7 @@ describe('TUI', function()
 
     feed_data(':set notermguicolors\n')
     screen:expect([[
-      {5:^}{6:G}                                                |
+      {6:^^G}                                                |
       {2:~                                                 }|*3
       {3:[No Name] [+]                                     }|
       :set notermguicolors                              |
@@ -1635,7 +1634,7 @@ describe('TUI', function()
     child_exec_lua('vim.cmd.terminal(...)', testprg('tty-test'))
     screen:expect {
       grid = [[
-      {1:t}ty ready                                         |
+      ^tty ready                                         |
                                                         |*3
       {2:^^^^^^^                                           }|
                                                         |
@@ -1647,7 +1646,7 @@ describe('TUI', function()
     )
     screen:expect {
       grid = [[
-      {1:t}ty ready                                         |
+      ^tty ready                                         |
       {4:text}{5:color}text                                     |
                                                         |*2
       {2:^^^^^^^                                           }|
@@ -1659,7 +1658,7 @@ describe('TUI', function()
     feed_data(':set notermguicolors\n')
     screen:expect {
       grid = [[
-      {1:t}ty ready                                         |
+      ^tty ready                                         |
       {4:text}colortext                                     |
                                                         |*2
       {6:^^^^^^^}{7:                                           }|
@@ -1682,7 +1681,7 @@ describe('TUI', function()
     child_session:request('nvim_set_hl', 0, 'Visual', { undercurl = true })
     feed_data('ifoobar\027V')
     screen:expect([[
-      {5:fooba}{1:r}                                            |
+      {5:fooba}^r                                            |
       {4:~                                                 }|*3
       {2:[No Name] [+]                                     }|
       {3:-- VISUAL LINE --}                                 |
@@ -1690,7 +1689,7 @@ describe('TUI', function()
     ]])
     child_session:request('nvim_set_hl', 0, 'Visual', { underdouble = true })
     screen:expect([[
-      {6:fooba}{1:r}                                            |
+      {6:fooba}^r                                            |
       {4:~                                                 }|*3
       {2:[No Name] [+]                                     }|
       {3:-- VISUAL LINE --}                                 |
@@ -1729,9 +1728,7 @@ describe('TUI', function()
     eq(expected, rv)
 
     ---@type table
-    local expected_version = ({
-      child_session:request('nvim_exec_lua', 'return vim.version()', {}),
-    })[2]
+    local expected_version = child_exec_lua('return vim.version()')
     -- vim.version() returns `prerelease` string. Coerce it to boolean.
     expected_version.prerelease = not not expected_version.prerelease
 
@@ -1780,7 +1777,7 @@ describe('TUI', function()
     child_session:request('nvim_set_option_value', 'listchars', 'eol:$', { win = 0 })
     feed_data('gg')
     local singlewidth_screen = [[
-      {13:℃}{12:℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃}|
+      {12:^℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃}|
       {12:℃℃℃℃℃℃℃℃℃℃}{15:$}{12:                                       }|
       ℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃℃|
       ℃℃℃℃℃℃℃℃℃℃{4:$}                                       |
@@ -1791,7 +1788,7 @@ describe('TUI', function()
     -- When grid assumes "℃" to be double-width but host terminal assumes it to be single-width,
     -- the second cell of "℃" is a space and the attributes of the "℃" are applied to it.
     local doublewidth_screen = [[
-      {13:℃}{12: ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ }|
+      {12:^℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ }|
       {12:℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ }|
       {12:℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ }{15:$}{12:                             }|
       ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ ℃ {4:@@@@}|
@@ -1824,7 +1821,7 @@ describe('TUI', function()
     child_session:request('nvim_set_option_value', 'listchars', 'eol:$', { win = 0 })
     feed_data('gg')
     local singlewidth_screen = [[
-      {13:✓}{12:✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓}|
+      {12:^✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓}|
       {12:✓✓✓✓✓✓✓✓✓✓}{15:$}{12:                                       }|
       ✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓✓|
       ✓✓✓✓✓✓✓✓✓✓{4:$}                                       |
@@ -1835,7 +1832,7 @@ describe('TUI', function()
     -- When grid assumes "✓" to be double-width but host terminal assumes it to be single-width,
     -- the second cell of "✓" is a space and the attributes of the "✓" are applied to it.
     local doublewidth_screen = [[
-      {13:✓}{12: ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ }|
+      {12:^✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ }|
       {12:✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ }|
       {12:✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ }{15:$}{12:                             }|
       ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ ✓ {4:@@@@}|
@@ -1855,52 +1852,80 @@ describe('TUI', function()
   end)
 
   it('draws correctly when cursor_address overflows #21643', function()
-    t.skip(is_os('mac'), 'FIXME: crashes/errors on macOS')
-    screen:try_resize(77, 855)
+    screen:try_resize(70, 333)
     retry(nil, nil, function()
-      eq({ true, 852 }, { child_session:request('nvim_win_get_height', 0) })
+      eq({ true, 330 }, { child_session:request('nvim_win_get_height', 0) })
+    end)
+    child_session:request('nvim_set_option_value', 'cursorline', true, {})
+    -- Use full screen message so that redrawing afterwards is more deterministic.
+    child_session:notify('nvim_command', 'intro')
+    screen:expect({ any = 'Nvim is open source and freely distributable' })
+    -- Going to top-left corner needs 3 bytes.
+    -- Setting underline attribute needs 9 bytes.
+    -- A Ꝩ character takes 3 bytes.
+    -- The whole line needs 3 + 9 + 3 * 21838 + 3 = 65529 bytes.
+    -- The cursor_address that comes after will overflow the 65535-byte buffer.
+    local line = ('Ꝩ'):rep(21838) .. '℃'
+    child_session:notify('nvim_buf_set_lines', 0, 0, -1, true, { line, 'b' })
+    -- Close the :intro message and redraw the lines.
+    feed_data('\n')
+    screen:expect([[
+      {12:^ꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨ}|
+      {12:ꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨ}|*310
+      {12:ꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨ℃ }|
+      b                                                                     |
+      {4:~                                                                     }|*17
+      {5:[No Name] [+]                                                         }|
+                                                                            |
+      {3:-- TERMINAL --}                                                        |
+    ]])
+  end)
+
+  it('draws correctly when setting title overflows #30793', function()
+    screen:try_resize(67, 327)
+    retry(nil, nil, function()
+      eq({ true, 324 }, { child_session:request('nvim_win_get_height', 0) })
+    end)
+    child_exec_lua([[
+      vim.o.cmdheight = 0
+      vim.o.laststatus = 0
+      vim.o.ruler = false
+      vim.o.showcmd = false
+      vim.o.termsync = false
+      vim.o.title = true
+    ]])
+    retry(nil, nil, function()
+      eq('[No Name] - Nvim', api.nvim_buf_get_var(0, 'term_title'))
+      eq({ true, 326 }, { child_session:request('nvim_win_get_height', 0) })
     end)
     -- Use full screen message so that redrawing afterwards is more deterministic.
     child_session:notify('nvim_command', 'intro')
-    screen:expect({ any = 'Nvim' })
+    screen:expect({ any = 'Nvim is open source and freely distributable' })
     -- Going to top-left corner needs 3 bytes.
-    -- Setting underline attribute needs 9 bytes.
-    -- The whole line needs 3 + 9 + 65513 + 3 = 65528 bytes.
-    -- The cursor_address that comes after will overflow the 65535-byte buffer.
-    local line = ('a'):rep(65513) .. '℃'
-    child_session:notify(
-      'nvim_exec_lua',
-      [[
-      vim.api.nvim_buf_set_lines(0, 0, -1, true, {...})
-      vim.o.cursorline = true
-    ]],
-      { line, 'b' }
-    )
+    -- A Ꝩ character takes 3 bytes.
+    -- The whole line needs 3 + 3 * 21842 = 65529 bytes.
+    -- The title will be updated because the buffer is now modified.
+    -- The start of the OSC 0 sequence to set title can fit in the 65535-byte buffer,
+    -- but the title string cannot.
+    local line = ('Ꝩ'):rep(21842)
+    child_session:notify('nvim_buf_set_lines', 0, 0, -1, true, { line })
     -- Close the :intro message and redraw the lines.
     feed_data('\n')
-    screen:expect(
-      '{13:a}{12:'
-        .. ('a'):rep(76)
-        .. '}|\n'
-        .. ('{12:' .. ('a'):rep(77) .. '}|\n'):rep(849)
-        .. '{12:'
-        .. ('a'):rep(63)
-        .. '℃'
-        .. (' '):rep(13)
-        .. '}|\n'
-        .. dedent([[
-      b                                                                            |
-      {5:[No Name] [+]                                                                }|
-                                                                                   |
-      {3:-- TERMINAL --}                                                               |]])
-    )
+    screen:expect([[
+      ^ꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨ|
+      ꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨꝨ|*325
+      {3:-- TERMINAL --}                                                     |
+    ]])
+    retry(nil, nil, function()
+      eq('[No Name] + - Nvim', api.nvim_buf_get_var(0, 'term_title'))
+    end)
   end)
 
   it('visual bell (padding) does not crash #21610', function()
     feed_data ':set visualbell\n'
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       :set visualbell                                   |
@@ -1914,7 +1939,7 @@ describe('TUI', function()
     feed_data 'i'
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       {3:-- INSERT --}                                      |
@@ -1929,7 +1954,7 @@ describe('TUI', function()
       grid = [[
       Vim: Caught deadly signal 'SIGTERM'               |
                                                         |*2
-      [Process exited 1]{1: }                               |
+      [Process exited 1]^                                |
                                                         |*2
       {3:-- TERMINAL --}                                    |
     ]],
@@ -1956,7 +1981,7 @@ describe('TUI', function()
       [5] = { bold = true },
     })
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {2:~}{3:                                                 }|*3
       {4:[No Name]                                         }|
                                                         |
@@ -1964,7 +1989,7 @@ describe('TUI', function()
     ]])
     feed_data('i')
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {2:~}{3:                                                 }|*3
       {4:[No Name]                                         }|
       {5:-- INSERT --}                                      |
@@ -1975,7 +2000,7 @@ describe('TUI', function()
   it('redraws on SIGWINCH even if terminal size is unchanged #23411', function()
     child_session:request('nvim_echo', { { 'foo' } }, false, {})
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       foo                                               |
@@ -1983,7 +2008,7 @@ describe('TUI', function()
     ]])
     exec_lua([[vim.uv.kill(vim.fn.jobpid(vim.bo.channel), 'sigwinch')]])
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -2006,7 +2031,7 @@ describe('TUI', function()
     ]])
     feed_data('\003')
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       Type  :qa  and press <Enter> to exit Nvim         |
@@ -2021,7 +2046,7 @@ describe('TUI', function()
       {1:foo}                                               |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
-      /foo{1: }                                             |
+      /foo^                                              |
       {3:-- TERMINAL --}                                    |
     ]])
     screen:sleep(10)
@@ -2030,7 +2055,7 @@ describe('TUI', function()
       foo                                               |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
-      /foob{1: }                                            |
+      /foob^                                             |
       {3:-- TERMINAL --}                                    |
     ]])
     screen:sleep(10)
@@ -2039,7 +2064,7 @@ describe('TUI', function()
       foo                                               |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
-      /fooba{1: }                                           |
+      /fooba^                                            |
       {3:-- TERMINAL --}                                    |
     ]])
   end)
@@ -2089,8 +2114,7 @@ describe('TUI', function()
       [5] = { bold = true, reverse = true },
       [6] = { foreground = Screen.colors.White, background = Screen.colors.DarkGreen },
     })
-    screen:attach()
-    fn.termopen({
+    fn.jobstart({
       nvim_prog,
       '--clean',
       '--cmd',
@@ -2100,6 +2124,7 @@ describe('TUI', function()
       '--cmd',
       'let start = reltime() | while v:true | if reltimefloat(reltime(start)) > 2 | break | endif | endwhile',
     }, {
+      term = true,
       env = {
         VIMRUNTIME = os.getenv('VIMRUNTIME'),
       },
@@ -2122,8 +2147,7 @@ describe('TUI', function()
   for _, guicolors in ipairs({ 'notermguicolors', 'termguicolors' }) do
     it('has no black flicker when clearing regions during startup with ' .. guicolors, function()
       local screen = Screen.new(50, 10)
-      screen:attach()
-      fn.termopen({
+      fn.jobstart({
         nvim_prog,
         '--clean',
         '--cmd',
@@ -2131,6 +2155,7 @@ describe('TUI', function()
         '--cmd',
         'sleep 10',
       }, {
+        term = true,
         env = {
           VIMRUNTIME = os.getenv('VIMRUNTIME'),
         },
@@ -2171,7 +2196,7 @@ describe('TUI', function()
     local screen = tt.setup_child_nvim({ '--clean', '-l', script_file })
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       ~                                                 |*3
       [No Name]                       0,0-1          All|
                                                         |
@@ -2184,7 +2209,7 @@ describe('TUI', function()
       Xargv0nvim                                        |
       --embed                                           |
       --clean                                           |
-      {1:X}argv0nvim                                        |
+      ^Xargv0nvim                                        |
       [No Name] [+]                   5,1            Bot|
       4 more lines                                      |
       {3:-- TERMINAL --}                                    |
@@ -2210,7 +2235,7 @@ describe('TUI', function()
       :q                                                |
       abc                                               |
                                                         |
-      [Process exited 0]{1: }                               |
+      [Process exited 0]^                                |
                                                         |
       {3:-- TERMINAL --}                                    |
     ]])
@@ -2231,7 +2256,7 @@ describe('TUI', function()
     })
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -2241,7 +2266,7 @@ describe('TUI', function()
 
     command([[call chansend(b:terminal_job_id, "\<C-h>")]])
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       <C-h>                                             |
@@ -2264,7 +2289,7 @@ describe('TUI', function()
     }, { cols = 80 })
     screen:expect {
       grid = [[
-      {1:1}st line                                                                        |
+      ^1st line                                                                        |
                                                                                       |*2
       2nd line                                                                        |
       {5:[No Name] [+]                                                 1,1            All}|
@@ -2277,7 +2302,7 @@ describe('TUI', function()
       grid = [[
       1st line                                                                        |
                                                                                       |
-      {1: }                                                                               |
+      ^                                                                                |
       2nd line                                                                        |
       {5:[No Name] [+]                                                 1,161          All}|
                                                                                       |
@@ -2297,7 +2322,7 @@ describe('TUI', function()
     }, { extra_rows = 10, cols = 66 })
     screen:expect {
       grid = [[
-                                                                        |
+            ^                                                            |
             aabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabb|*12
             aabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabba@@@|
       [No Name] [+]                                   1,0-1          Top|
@@ -2316,7 +2341,7 @@ describe('TUI', function()
     -- 500-cell limit, so the buffer is flushed after these spaces.
     screen:expect {
       grid = [[
-                                                                        |
+            ^                                                            |
             aabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabb|*12
             aabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabbaabba@@@|
       [No Name] [+]                                   1,0-1          Top|
@@ -2343,7 +2368,7 @@ describe('TUI', function()
 
     screen:expect {
       grid = [[
-      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+      ^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
       ~                                                 |*3
       [No Name] [+]                   1,1            All|
                                                         |
@@ -2355,7 +2380,8 @@ describe('TUI', function()
     feed_data(':set columns=12\n')
     screen:expect {
       grid = [[
-      aaaaaaaaaaaa                                      |*4
+      ^aaaaaaaaaaaa                                      |
+      aaaaaaaaaaaa                                      |*3
       < [+] 1,1                                         |
                                                         |
       -- TERMINAL --                                    |
@@ -2393,7 +2419,7 @@ describe('TUI UIEnter/UILeave', function()
     })
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -2403,7 +2429,7 @@ describe('TUI UIEnter/UILeave', function()
     feed_data(':echo g:evs\n')
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       ['VimEnter', 'UIEnter']                           |
@@ -2434,7 +2460,7 @@ describe('TUI FocusGained/FocusLost', function()
     })
 
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -2456,7 +2482,7 @@ describe('TUI FocusGained/FocusLost', function()
     retry(2, 3 * screen.timeout, function()
       feed_data('\027[I')
       screen:expect([[
-        {1: }                                                 |
+        ^                                                  |
         {4:~                                                 }|*3
         {5:[No Name]                                         }|
         gained                                            |
@@ -2465,7 +2491,7 @@ describe('TUI FocusGained/FocusLost', function()
 
       feed_data('\027[O')
       screen:expect([[
-        {1: }                                                 |
+        ^                                                  |
         {4:~                                                 }|*3
         {5:[No Name]                                         }|
         lost                                              |
@@ -2479,7 +2505,7 @@ describe('TUI FocusGained/FocusLost', function()
     feed_data('i')
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
       :set noshowmode                                   |
@@ -2489,7 +2515,7 @@ describe('TUI FocusGained/FocusLost', function()
     retry(2, 3 * screen.timeout, function()
       feed_data('\027[I')
       screen:expect([[
-        {1: }                                                 |
+        ^                                                  |
         {4:~                                                 }|*3
         {5:[No Name]                                         }|
         gained                                            |
@@ -2497,7 +2523,7 @@ describe('TUI FocusGained/FocusLost', function()
       ]])
       feed_data('\027[O')
       screen:expect([[
-        {1: }                                                 |
+        ^                                                  |
         {4:~                                                 }|*3
         {5:[No Name]                                         }|
         lost                                              |
@@ -2515,7 +2541,7 @@ describe('TUI FocusGained/FocusLost', function()
                                                         |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
-      :{1: }                                                |
+      :^                                                 |
       {3:-- TERMINAL --}                                    |
     ]])
     feed_data('\027[O')
@@ -2524,7 +2550,7 @@ describe('TUI FocusGained/FocusLost', function()
                                                         |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
-      :{1: }                                                |
+      :^                                                 |
       {3:-- TERMINAL --}                                    |
     ]],
       unchanged = true,
@@ -2567,7 +2593,7 @@ describe('TUI FocusGained/FocusLost', function()
     -- Wait for terminal to be ready.
     screen:expect {
       grid = [[
-      {1:r}eady $ zia                                       |
+      ^ready $ zia                                       |
                                                         |
       [Process exited 0]                                |
                                                         |*2
@@ -2579,7 +2605,7 @@ describe('TUI FocusGained/FocusLost', function()
     feed_data('\027[I')
     screen:expect {
       grid = [[
-      {1:r}eady $ zia                                       |
+      ^ready $ zia                                       |
                                                         |
       [Process exited 0]                                |
                                                         |*2
@@ -2591,7 +2617,7 @@ describe('TUI FocusGained/FocusLost', function()
 
     feed_data('\027[O')
     screen:expect([[
-      {1:r}eady $ zia                                       |
+      ^ready $ zia                                       |
                                                         |
       [Process exited 0]                                |
                                                         |*2
@@ -2611,7 +2637,7 @@ describe('TUI FocusGained/FocusLost', function()
       msg3                                              |
       msg4                                              |
       msg5                                              |
-      {10:Press ENTER or type command to continue}{1: }          |
+      {10:Press ENTER or type command to continue}^           |
       {3:-- TERMINAL --}                                    |
     ]],
     }
@@ -2624,7 +2650,7 @@ describe('TUI FocusGained/FocusLost', function()
       msg3                                              |
       msg4                                              |
       msg5                                              |
-      {10:Press ENTER or type command to continue}{1: }          |
+      {10:Press ENTER or type command to continue}^           |
       {3:-- TERMINAL --}                                    |
     ]],
       unchanged = true,
@@ -2667,7 +2693,7 @@ describe("TUI 't_Co' (terminal colors)", function()
 
     screen:expect(string.format(
       [[
-      {1: }                                                 |
+      ^                                                  |
       %s|*4
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -2678,7 +2704,7 @@ describe("TUI 't_Co' (terminal colors)", function()
     feed_data(':echo &t_Co\n')
     screen:expect(string.format(
       [[
-      {1: }                                                 |
+      ^                                                  |
       %s|*4
       %-3s                                               |
       {3:-- TERMINAL --}                                    |
@@ -3005,7 +3031,7 @@ describe('TUI', function()
     -- Wait for TUI to start.
     feed_data('Gitext')
     screen:expect([[
-      text{1: }                                             |
+      text^                                              |
       {4:~                                                 }|*4
       {3:-- INSERT --}                                      |
       {3:-- TERMINAL --}                                    |
@@ -3022,7 +3048,7 @@ describe('TUI', function()
     nvim_tui()
 
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*4
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -3032,7 +3058,7 @@ describe('TUI', function()
 
     screen:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*4
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -3158,7 +3184,6 @@ describe('TUI', function()
           local req = args.data
           local payload = req:match('^\027P%+q([%x;]+)$')
           if payload and vim.text.hexdecode(payload) == 'Ms' then
-            vim.g.xtgettcap = 'Ms'
             local resp = string.format('\027P1+r%s=%s\027\\', payload, vim.text.hexencode('\027]52;;\027\\'))
             vim.api.nvim_chan_send(vim.bo[args.buf].channel, resp)
             return true
@@ -3176,9 +3201,6 @@ describe('TUI', function()
     }, {
       env = {
         VIMRUNTIME = os.getenv('VIMRUNTIME'),
-
-        -- Only queries when SSH_TTY is set
-        SSH_TTY = '/dev/pts/1',
       },
     })
 
@@ -3186,8 +3208,7 @@ describe('TUI', function()
 
     local child_session = n.connect(child_server)
     retry(nil, 1000, function()
-      eq('Ms', eval("get(g:, 'xtgettcap', '')"))
-      eq({ true, 'OSC 52' }, { child_session:request('nvim_eval', 'g:clipboard.name') })
+      eq({ true, { osc52 = true } }, { child_session:request('nvim_eval', 'g:termfeatures') })
     end)
   end)
 end)
@@ -3282,7 +3303,7 @@ describe('TUI bg color', function()
       'autocmd OptionSet background echo "did OptionSet, yay!"',
     })
     screen:expect([[
-      {1: }                                                 |
+      ^                                                  |
       {3:~}                                                 |*3
       {5:[No Name]                       0,0-1          All}|
       did OptionSet, yay!                               |
@@ -3320,7 +3341,7 @@ describe('TUI as a client', function()
     feed_data('iHello, World')
     screen_server:expect {
       grid = [[
-      Hello, World{1: }                                     |
+      Hello, World^                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -3330,7 +3351,7 @@ describe('TUI as a client', function()
     feed_data('\027')
     screen_server:expect {
       grid = [[
-      Hello, Worl{1:d}                                      |
+      Hello, Worl^d                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -3347,7 +3368,7 @@ describe('TUI as a client', function()
 
     screen_client:expect {
       grid = [[
-      Hello, Worl{1:d}                                      |
+      Hello, Worl^d                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -3360,7 +3381,7 @@ describe('TUI as a client', function()
     feed_data('0:set lines=3\n')
     screen_server:expect {
       grid = [[
-      {1:a}aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+      ^aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
       {5:[No Name] [+]                                     }|
                                                         |*4
       {3:-- TERMINAL --}                                    |
@@ -3391,7 +3412,7 @@ describe('TUI as a client', function()
 
     screen_client:expect {
       grid = [[
-      Halloj{1:!}                                           |
+      Halloj^!                                           |
       {4:~                                                 }|*4
                                                         |
       {3:-- TERMINAL --}                                    |
@@ -3405,7 +3426,7 @@ describe('TUI as a client', function()
       grid = [[
       Vim: Caught deadly signal 'SIGTERM'               |
                                                         |*2
-      [Process exited 1]{1: }                               |
+      [Process exited 1]^                                |
                                                         |*2
       {3:-- TERMINAL --}                                    |
     ]],
@@ -3434,7 +3455,7 @@ describe('TUI as a client', function()
     screen:expect([[
       Remote ui failed to start: {MATCH:.*}|
                                                                   |
-      [Process exited 1]{1: }                                         |
+      [Process exited 1]^                                          |
                                                                   |*3
       {3:-- TERMINAL --}                                              |
     ]])
@@ -3460,7 +3481,7 @@ describe('TUI as a client', function()
     })
     screen_server:expect {
       grid = [[
-      {1: }                                                 |
+      ^                                                  |
       {4:~                                                 }|*3
       {5:[No Name]                                         }|
                                                         |
@@ -3471,7 +3492,7 @@ describe('TUI as a client', function()
     feed_data('iHello, World')
     screen_server:expect {
       grid = [[
-      Hello, World{1: }                                     |
+      Hello, World^                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
       {3:-- INSERT --}                                      |
@@ -3481,7 +3502,7 @@ describe('TUI as a client', function()
     feed_data('\027')
     screen_server:expect {
       grid = [[
-      Hello, Worl{1:d}                                      |
+      Hello, Worl^d                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -3498,7 +3519,7 @@ describe('TUI as a client', function()
 
     screen_client:expect {
       grid = [[
-      Hello, Worl{1:d}                                      |
+      Hello, Worl^d                                      |
       {4:~                                                 }|*3
       {5:[No Name] [+]                                     }|
                                                         |
@@ -3513,7 +3534,7 @@ describe('TUI as a client', function()
     screen_server:expect {
       grid = [[
                                                         |
-      [Process exited ]] .. status .. [[]{1: }{MATCH:%s+}|
+      [Process exited ]] .. status .. [[]^ {MATCH:%s+}|
                                                         |*4
       {3:-- TERMINAL --}                                    |
     ]],
@@ -3522,7 +3543,7 @@ describe('TUI as a client', function()
     screen_client:expect {
       grid = [[
                                                         |
-      [Process exited ]] .. status .. [[]{1: }{MATCH:%s+}|
+      [Process exited ]] .. status .. [[]^ {MATCH:%s+}|
                                                         |*4
       {3:-- TERMINAL --}                                    |
     ]],

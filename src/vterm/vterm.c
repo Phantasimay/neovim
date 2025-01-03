@@ -1,8 +1,9 @@
 #include "vterm_internal.h"
 
+#include "auto/config.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 
 /*****************

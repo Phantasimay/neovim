@@ -9,6 +9,7 @@ extern "C" {
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include "nvim/macros_defs.h"
 #include "vterm_keycodes.h"
 
 #define VTERM_VERSION_MAJOR 0
@@ -21,7 +22,7 @@ extern "C" {
 /* Any cell can contain at most one basic printing character and 5 combining
  * characters. This number could be changed but will be ABI-incompatible if
  * you do */
-#define VTERM_MAX_CHARS_PER_CELL 6
+enum{ VTERM_MAX_CHARS_PER_CELL=6};
 
 typedef struct VTerm VTerm;
 typedef struct VTermState VTermState;

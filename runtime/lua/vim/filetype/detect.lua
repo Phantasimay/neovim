@@ -181,6 +181,16 @@ function M.changelog(_, bufnr)
 end
 
 --- @type vim.filetype.mapfn
+function M.cl(_, bufnr)
+  local lines = table.concat(getlines(bufnr, 1, 4))
+  if lines:match('/%*') then
+    return 'opencl'
+  else
+    return 'lisp'
+  end
+end
+
+--- @type vim.filetype.mapfn
 function M.class(_, bufnr)
   -- Check if not a Java class (starts with '\xca\xfe\xba\xbe')
   if not getline(bufnr, 1):find('^\202\254\186\190') then
@@ -209,6 +219,24 @@ function M.cls(_, bufnr)
   return 'st'
 end
 
+--- *.cmd is close to a Batch file, but on OS/2 Rexx files and TI linker command files also use *.cmd.
+--- lnk: `/* comment */`, `// comment`, and `--linker-option=value`
+--- rexx: `/* comment */`, `-- comment`
+--- @type vim.filetype.mapfn
+function M.cmd(_, bufnr)
+  local lines = table.concat(getlines(bufnr, 1, 20))
+  if matchregex(lines, [[MEMORY\|SECTIONS\|\%(^\|\n\)--\S\|\%(^\|\n\)//]]) then
+    return 'lnk'
+  else
+    local line1 = getline(bufnr, 1)
+    if line1:find('^/%*') then
+      return 'rexx'
+    else
+      return 'dosbatch'
+    end
+  end
+end
+
 --- @type vim.filetype.mapfn
 function M.conf(path, bufnr)
   if fn.did_filetype() ~= 0 or path:find(vim.g.ft_ignore_pat) then
@@ -227,7 +255,8 @@ end
 --- Debian Control
 --- @type vim.filetype.mapfn
 function M.control(_, bufnr)
-  if getline(bufnr, 1):find('^Source:') then
+  local line1 = getline(bufnr, 1)
+  if line1 and findany(line1, { '^Source:', '^Package:' }) then
     return 'debcontrol'
   end
 end
@@ -869,6 +898,16 @@ function M.log(path, _)
 end
 
 --- @type vim.filetype.mapfn
+function M.ll(_, bufnr)
+  local first_line = getline(bufnr, 1)
+  if matchregex(first_line, [[;\|\<source_filename\>\|\<target\>]]) then
+    return 'llvm'
+  else
+    return 'lifelines'
+  end
+end
+
+--- @type vim.filetype.mapfn
 function M.lpc(_, bufnr)
   if vim.g.lpc_syntax_for_c then
     for _, line in ipairs(getlines(bufnr, 1, 12)) do
@@ -1473,6 +1512,7 @@ local function sh(path, contents, name)
       vim.b[b].is_kornshell = nil
       vim.b[b].is_sh = nil
     end
+    return M.shell(path, contents, 'bash'), on_detect
     -- Ubuntu links sh to dash
   elseif matchregex(name, [[\<\(sh\|dash\)\>]]) then
     on_detect = function(b)
@@ -1908,7 +1948,7 @@ local function match_from_hashbang(contents, path, dispatch_extension)
   end
 
   for k, v in pairs(patterns_hashbang) do
-    local ft = type(v) == 'table' and v[1] or v
+    local ft = type(v) == 'table' and v[1] or v --[[@as string]]
     local opts = type(v) == 'table' and v[2] or {}
     if opts.vim_regex and matchregex(name, k) or name:find(k) then
       return ft
@@ -2080,6 +2120,7 @@ local function match_from_text(contents, path)
         return ft
       end
     else
+      --- @cast k string
       local opts = type(v) == 'table' and v[2] or {}
       if opts.start_lnum and opts.end_lnum then
         assert(

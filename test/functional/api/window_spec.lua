@@ -170,7 +170,6 @@ describe('API/win', function()
 
     it('updates the screen, and also when the window is unfocused', function()
       local screen = Screen.new(30, 9)
-      screen:attach()
 
       insert('prologue')
       feed('100o<esc>')
@@ -281,7 +280,6 @@ describe('API/win', function()
 
     it('updates cursorline and statusline ruler in non-current window', function()
       local screen = Screen.new(60, 8)
-      screen:attach()
       command('set ruler')
       command('set cursorline')
       insert([[
@@ -314,7 +312,6 @@ describe('API/win', function()
 
     it('updates cursorcolumn in non-current window', function()
       local screen = Screen.new(60, 8)
-      screen:attach()
       command('set cursorcolumn')
       insert([[
         aaa
@@ -360,6 +357,15 @@ describe('API/win', function()
       )
       api.nvim_win_set_height(api.nvim_list_wins()[2], 2)
       eq(2, api.nvim_win_get_height(api.nvim_list_wins()[2]))
+    end)
+
+    it('failure modes', function()
+      command('split')
+      eq('Invalid window id: 999999', pcall_err(api.nvim_win_set_height, 999999, 10))
+      eq(
+        'Wrong type for argument 2 when calling nvim_win_set_height, expecting Integer',
+        pcall_err(api.nvim_win_set_height, 0, 0.9)
+      )
     end)
 
     it('correctly handles height=1', function()
@@ -410,6 +416,15 @@ describe('API/win', function()
       )
       api.nvim_win_set_width(api.nvim_list_wins()[2], 2)
       eq(2, api.nvim_win_get_width(api.nvim_list_wins()[2]))
+    end)
+
+    it('failure modes', function()
+      command('vsplit')
+      eq('Invalid window id: 999999', pcall_err(api.nvim_win_set_width, 999999, 10))
+      eq(
+        'Wrong type for argument 2 when calling nvim_win_set_width, expecting Integer',
+        pcall_err(api.nvim_win_set_width, 0, 0.9)
+      )
     end)
 
     it('do not cause ml_get errors with foldmethod=expr #19989', function()
@@ -857,7 +872,6 @@ describe('API/win', function()
     it('with two diff windows', function()
       local X = api.nvim_get_vvar('maxcol')
       local screen = Screen.new(45, 22)
-      screen:attach()
       exec([[
         set diffopt+=context:2 number
         let expr = 'printf("%08d", v:val) .. repeat("!", v:val)'
@@ -975,7 +989,6 @@ describe('API/win', function()
     it('with wrapped lines', function()
       local X = api.nvim_get_vvar('maxcol')
       local screen = Screen.new(45, 22)
-      screen:attach()
       exec([[
         set number cpoptions+=n
         call setline(1, repeat([repeat('foobar-', 36)], 3))
@@ -1669,7 +1682,7 @@ describe('API/win', function()
         autocmd BufWinEnter * ++once let fired = v:true
       ]])
       eq(
-        'Failed to set buffer 2',
+        'Vim:E37: No write since last change (add ! to override)',
         pcall_err(api.nvim_open_win, api.nvim_create_buf(true, true), false, { split = 'left' })
       )
       eq(false, eval('fired'))
@@ -2557,7 +2570,6 @@ describe('API/win', function()
 
     it('updates statusline when moving bottom split', function()
       local screen = Screen.new(10, 10)
-      screen:attach()
       exec([[
         set laststatus=0
         belowright split

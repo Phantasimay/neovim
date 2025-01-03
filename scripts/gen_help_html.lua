@@ -48,7 +48,7 @@ local spell_dict = {
 --- specify the list of keywords to ignore (i.e. allow), or true to disable spell check completely.
 --- @type table<string, true|string[]>
 local spell_ignore_files = {
-  ['backers.txt'] = true,
+  ['credits.txt'] = { 'Neovim' },
   ['news.txt'] = { 'tree-sitter' }, -- in news, may refer to the upstream "tree-sitter" library
   ['news-0.10.txt'] = { 'tree-sitter' },
 }
@@ -70,6 +70,8 @@ local new_layout = {
   ['dev_vimpatch.txt'] = true,
   ['editorconfig.txt'] = true,
   ['faq.txt'] = true,
+  ['gui.txt'] = true,
+  ['intro.txt'] = true,
   ['lua.txt'] = true,
   ['luaref.txt'] = true,
   ['news.txt'] = true,
@@ -84,6 +86,7 @@ local new_layout = {
 
 -- Map of new:old pages, to redirect renamed pages.
 local redirects = {
+  ['credits'] = 'backers',
   ['tui'] = 'term',
   ['terminal'] = 'nvim_terminal_emulator',
 }
@@ -116,7 +119,7 @@ local exclude_invalid_urls = {
 -- Deprecated, brain-damaged files that I don't care about.
 local ignore_errors = {
   ['pi_netrw.txt'] = true,
-  ['backers.txt'] = true,
+  ['credits.txt'] = true,
 }
 
 local function tofile(fname, text)
@@ -554,11 +557,8 @@ local function visit_node(root, level, lang_tree, headings, opt, stats)
       return '' -- Spurious "===" or "---" in the help doc.
     end
 
-    -- Use the first *tag* node as the heading anchor, if any.
-    local tagnode = first(heading_node, 'tag')
-    -- Use the *tag* as the heading anchor id, if possible.
-    local tagname = tagnode and url_encode(trim(node_text(tagnode:child(1), false)))
-      or to_heading_tag(hname)
+    -- Generate an anchor id from the heading text.
+    local tagname = to_heading_tag(hname)
     if node_name == 'h1' or #headings == 0 then
       ---@type nvim.gen_help_html.heading
       local heading = { name = hname, subheadings = {}, tag = tagname }
@@ -678,7 +678,7 @@ local function visit_node(root, level, lang_tree, headings, opt, stats)
       table.insert(stats.first_tags, tagname)
       return ''
     end
-    local el = in_heading and 'span' or 'code'
+    local el = 'span'
     local encoded_tagname = url_encode(tagname)
     local s = ('%s<%s id="%s" class="%s"><a href="#%s">%s</a></%s>'):format(
       ws(),
@@ -694,15 +694,6 @@ local function visit_node(root, level, lang_tree, headings, opt, stats)
     end
 
     if in_heading and prev ~= 'tag' then
-      -- Don't set "id", let the heading use the tag as its "id" (used by search engines).
-      s = ('%s<%s class="%s"><a href="#%s">%s</a></%s>'):format(
-        ws(),
-        el,
-        cssclass,
-        encoded_tagname,
-        trimmed,
-        el
-      )
       -- Start the <span> container for tags in a heading.
       -- This makes "justify-content:space-between" right-align the tags.
       --    <h2>foo bar<span>tag1 tag2</span></h2>
@@ -957,7 +948,7 @@ local function gen_one(fname, text, to_fname, old, commit, parser_path)
 
   <div class="container golden-grid help-body">
   <div class="col-wide">
-  <a name="%s"></a><h1 id="%s">%s</h1>
+  <a name="%s" href="#%s"><h1 id="%s">%s</h1></a>
   <p>
     <i>
     Nvim <code>:help</code> pages, <a href="https://github.com/neovim/neovim/blob/master/scripts/gen_help_html.lua">generated</a>
@@ -970,8 +961,9 @@ local function gen_one(fname, text, to_fname, old, commit, parser_path)
   </div>
   ]]):format(
     logo_svg,
-    stats.first_tags[2] or '',
     stats.first_tags[1] or '',
+    stats.first_tags[2] or '',
+    stats.first_tags[2] or '',
     title,
     vim.fs.basename(fname),
     main
@@ -1300,25 +1292,15 @@ end
 ---
 --- @return nvim.gen_help_html.gen_result result
 function M.gen(help_dir, to_dir, include, commit, parser_path)
-  vim.validate {
-    help_dir = {
-      help_dir,
-      function(d)
-        return vim.fn.isdirectory(vim.fs.normalize(d)) == 1
-      end,
-      'valid directory',
-    },
-    to_dir = { to_dir, 's' },
-    include = { include, 't', true },
-    commit = { commit, 's', true },
-    parser_path = {
-      parser_path,
-      function(f)
-        return f == nil or vim.fn.filereadable(vim.fs.normalize(f)) == 1
-      end,
-      'valid vimdoc.{so,dll} filepath',
-    },
-  }
+  vim.validate('help_dir', help_dir, function(d)
+    return vim.fn.isdirectory(vim.fs.normalize(d)) == 1
+  end, 'valid directory')
+  vim.validate('to_dir', to_dir, 'string')
+  vim.validate('include', include, 'table', true)
+  vim.validate('commit', commit, 'string', true)
+  vim.validate('parser_path', parser_path, function(f)
+    return vim.fn.filereadable(vim.fs.normalize(f)) == 1
+  end, true, 'valid vimdoc.{so,dll} filepath')
 
   local err_count = 0
   local redirects_count = 0
@@ -1421,23 +1403,13 @@ end
 ---
 --- @return nvim.gen_help_html.validate_result result
 function M.validate(help_dir, include, parser_path)
-  vim.validate {
-    help_dir = {
-      help_dir,
-      function(d)
-        return vim.fn.isdirectory(vim.fs.normalize(d)) == 1
-      end,
-      'valid directory',
-    },
-    include = { include, 't', true },
-    parser_path = {
-      parser_path,
-      function(f)
-        return f == nil or vim.fn.filereadable(vim.fs.normalize(f)) == 1
-      end,
-      'valid vimdoc.{so,dll} filepath',
-    },
-  }
+  vim.validate('help_dir', help_dir, function(d)
+    return vim.fn.isdirectory(vim.fs.normalize(d)) == 1
+  end, 'valid directory')
+  vim.validate('include', include, 'table', true)
+  vim.validate('parser_path', parser_path, function(f)
+    return vim.fn.filereadable(vim.fs.normalize(f)) == 1
+  end, true, 'valid vimdoc.{so,dll} filepath')
   local err_count = 0 ---@type integer
   local files_to_errors = {} ---@type table<string, string[]>
   ensure_runtimepath()

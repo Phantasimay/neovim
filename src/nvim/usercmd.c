@@ -18,7 +18,6 @@
 #include "nvim/garray.h"
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
-#include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/keycodes.h"
 #include "nvim/lua/executor.h"
@@ -26,6 +25,7 @@
 #include "nvim/mapping.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
+#include "nvim/memory_defs.h"
 #include "nvim/menu.h"
 #include "nvim/message.h"
 #include "nvim/option_vars.h"
@@ -91,6 +91,7 @@ static const char *command_complete[] = {
   [EXPAND_PACKADD] = "packadd",
   [EXPAND_RUNTIME] = "runtime",
   [EXPAND_SHELLCMD] = "shellcmd",
+  [EXPAND_SHELLCMDLINE] = "shellcmdline",
   [EXPAND_SIGN] = "sign",
   [EXPAND_TAGS] = "tag",
   [EXPAND_TAGS_LISTFILES] = "tag_listfiles",
@@ -285,8 +286,7 @@ const char *set_context_in_user_cmdarg(const char *cmd FUNC_ATTR_UNUSED, const c
   }
 
   if (argt & EX_XFILE) {
-    // EX_XFILE: file names are handled above.
-    xp->xp_context = context;
+    // EX_XFILE: file names are handled before this call.
     return NULL;
   }
 
@@ -464,8 +464,7 @@ static void uc_list(char *name, size_t name_len)
 
       // Put out the title first time
       if (!found) {
-        msg_puts_title(_("\n    Name              Args Address "
-                         "Complete    Definition"));
+        msg_puts_title(_("\n    Name              Args Address Complete    Definition"));
       }
       found = true;
       msg_putchar('\n');
@@ -495,7 +494,7 @@ static void uc_list(char *name, size_t name_len)
         msg_putchar(' ');
       }
 
-      msg_outtrans(cmd->uc_name, HL_ATTR(HLF_D));
+      msg_outtrans(cmd->uc_name, HLF_D, false);
       len = strlen(cmd->uc_name) + 4;
 
       do {
@@ -582,11 +581,11 @@ static void uc_list(char *name, size_t name_len)
       } while ((int64_t)len < 25 - over);
 
       IObuff[len] = NUL;
-      msg_outtrans(IObuff, 0);
+      msg_outtrans(IObuff, 0, false);
 
       if (cmd->uc_luaref != LUA_NOREF) {
         char *fn = nlua_funcref_str(cmd->uc_luaref, NULL);
-        msg_puts_attr(fn, HL_ATTR(HLF_8));
+        msg_puts_hl(fn, HLF_8, false);
         xfree(fn);
         // put the description on a new line
         if (*cmd->uc_rep != NUL) {
@@ -675,7 +674,8 @@ int parse_compl_arg(const char *value, int vallen, int *complp, uint32_t *argt, 
       *complp = i;
       if (i == EXPAND_BUFFERS) {
         *argt |= EX_BUFNAME;
-      } else if (i == EXPAND_DIRECTORIES || i == EXPAND_FILES) {
+      } else if (i == EXPAND_DIRECTORIES || i == EXPAND_FILES
+                 || i == EXPAND_SHELLCMDLINE) {
         *argt |= EX_XFILE;
       }
       break;

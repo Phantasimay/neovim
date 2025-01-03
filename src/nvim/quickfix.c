@@ -38,7 +38,6 @@
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/help.h"
-#include "nvim/highlight.h"
 #include "nvim/highlight_defs.h"
 #include "nvim/highlight_group.h"
 #include "nvim/macros_defs.h"
@@ -2697,7 +2696,7 @@ static void qf_goto_win_with_qfl_file(int qf_fnum)
       // Didn't find it, go to the window before the quickfix
       // window, unless 'switchbuf' contains 'uselast': in this case we
       // try to jump to the previously used window first.
-      if ((swb_flags & SWB_USELAST) && win_valid(prevwin)
+      if ((swb_flags & kOptSwbFlagUselast) && win_valid(prevwin)
           && !prevwin->w_p_wfb) {
         win = prevwin;
       } else if (altwin != NULL) {
@@ -2754,7 +2753,7 @@ static int qf_jump_to_usable_window(int qf_fnum, bool newwin, bool *opened_windo
 
   // If no usable window is found and 'switchbuf' contains "usetab"
   // then search in other tabs.
-  if (!usable_win && (swb_flags & SWB_USETAB)) {
+  if (!usable_win && (swb_flags & kOptSwbFlagUsetab)) {
     usable_win = qf_goto_tabwin_with_file(qf_fnum);
   }
 
@@ -2937,7 +2936,7 @@ static void qf_jump_print_msg(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, buf
     msg_scroll = false;
   }
   msg_ext_set_kind("quickfix");
-  msg_attr_keep(gap->ga_data, 0, true, false);
+  msg_keep(gap->ga_data, 0, true, false);
   msg_scroll = (int)i;
 
   qfga_clear();
@@ -3032,7 +3031,7 @@ static int qf_jump_to_buffer(qf_info_T *qi, int qf_index, qfline_T *qf_ptr, int 
 
   qf_jump_goto_line(qf_ptr->qf_lnum, qf_ptr->qf_col, qf_ptr->qf_viscol, qf_ptr->qf_pattern);
 
-  if ((fdo_flags & FDO_QUICKFIX) && openfold) {
+  if ((fdo_flags & kOptFdoFlagQuickfix) && openfold) {
     foldOpenCursor();
   }
   if (print_message) {
@@ -3144,10 +3143,10 @@ theend:
   decr_quickfix_busy();
 }
 
-// Highlight attributes used for displaying entries from the quickfix list.
-static int qfFileAttr;
-static int qfSepAttr;
-static int qfLineAttr;
+// Highlight ids used for displaying entries from the quickfix list.
+static int qfFile_hl_id;
+static int qfSep_hl_id;
+static int qfLine_hl_id;
 
 /// Display information about a single entry from the quickfix/location list.
 /// Used by ":clist/:llist" commands.
@@ -3195,10 +3194,10 @@ static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
   }
 
   msg_putchar('\n');
-  msg_outtrans(IObuff, cursel ? HL_ATTR(HLF_QFL) : qfFileAttr);
+  msg_outtrans(IObuff, cursel ? HLF_QFL : qfFile_hl_id, false);
 
   if (qfp->qf_lnum != 0) {
-    msg_puts_attr(":", qfSepAttr);
+    msg_puts_hl(":", qfSep_hl_id, false);
   }
   garray_T *gap = qfga_get();
   if (qfp->qf_lnum != 0) {
@@ -3206,14 +3205,14 @@ static void qf_list_entry(qfline_T *qfp, int qf_idx, bool cursel)
   }
   ga_concat(gap, qf_types(qfp->qf_type, qfp->qf_nr));
   ga_append(gap, NUL);
-  msg_puts_attr(gap->ga_data, qfLineAttr);
-  msg_puts_attr(":", qfSepAttr);
+  msg_puts_hl(gap->ga_data, qfLine_hl_id, false);
+  msg_puts_hl(":", qfSep_hl_id, false);
   if (qfp->qf_pattern != NULL) {
     gap = qfga_get();
     qf_fmt_text(gap, qfp->qf_pattern);
     ga_append(gap, NUL);
     msg_puts(gap->ga_data);
-    msg_puts_attr(":", qfSepAttr);
+    msg_puts_hl(":", qfSep_hl_id, false);
   }
   msg_puts(" ");
 
@@ -3275,17 +3274,17 @@ void qf_list(exarg_T *eap)
 
   // Get the attributes for the different quickfix highlight items.  Note
   // that this depends on syntax items defined in the qf.vim syntax file
-  qfFileAttr = syn_name2attr("qfFileName");
-  if (qfFileAttr == 0) {
-    qfFileAttr = HL_ATTR(HLF_D);
+  qfFile_hl_id = syn_name2id("qfFileName");
+  if (qfFile_hl_id == 0) {
+    qfFile_hl_id = HLF_D;
   }
-  qfSepAttr = syn_name2attr("qfSeparator");
-  if (qfSepAttr == 0) {
-    qfSepAttr = HL_ATTR(HLF_D);
+  qfSep_hl_id = syn_name2id("qfSeparator");
+  if (qfSep_hl_id == 0) {
+    qfSep_hl_id = HLF_D;
   }
-  qfLineAttr = syn_name2attr("qfLineNr");
-  if (qfLineAttr == 0) {
-    qfLineAttr = HL_ATTR(HLF_N);
+  qfLine_hl_id = syn_name2id("qfLineNr");
+  if (qfLine_hl_id == 0) {
+    qfLine_hl_id = HLF_N;
   }
 
   if (qfl->qf_nonevalid) {
@@ -4396,7 +4395,7 @@ static char *make_get_fullcmd(const char *makecmd, const char *fname)
   }
   msg_start();
   msg_puts(":!");
-  msg_outtrans(cmd, 0);  // show what we are doing
+  msg_outtrans(cmd, 0, false);  // show what we are doing
 
   return cmd;
 }
@@ -5243,9 +5242,9 @@ static void vgr_display_fname(char *fname)
   msg_start();
   char *p = msg_strtrunc(fname, true);
   if (p == NULL) {
-    msg_outtrans(fname, 0);
+    msg_outtrans(fname, 0, false);
   } else {
-    msg_outtrans(p, 0);
+    msg_outtrans(p, 0, false);
     xfree(p);
   }
   msg_clr_eos();
@@ -6462,6 +6461,64 @@ static int qf_add_entry_from_dict(qf_list_T *qfl, dict_T *d, bool first_entry, b
   return status;
 }
 
+/// Check if `entry` is closer to the target than `other_entry`.
+///
+/// Only returns true if `entry` is definitively closer. If it's further
+/// away, or there's not enough information to tell, return false.
+static bool entry_is_closer_to_target(qfline_T *entry, qfline_T *other_entry, int target_fnum,
+                                      int target_lnum, int target_col)
+{
+  // First, compare entries to target file.
+  if (!target_fnum) {
+    // Without a target file, we can't know which is closer.
+    return false;
+  }
+
+  bool is_target_file = entry->qf_fnum && entry->qf_fnum == target_fnum;
+  bool other_is_target_file = other_entry->qf_fnum && other_entry->qf_fnum == target_fnum;
+  if (!is_target_file && other_is_target_file) {
+    return false;
+  } else if (is_target_file && !other_is_target_file) {
+    return true;
+  }
+
+  // Both entries are pointing at the exact same file. Now compare line numbers.
+  if (!target_lnum) {
+    // Without a target line number, we can't know which is closer.
+    return false;
+  }
+
+  int line_distance = entry->qf_lnum
+                      ? abs(entry->qf_lnum - target_lnum) : INT_MAX;
+  int other_line_distance = other_entry->qf_lnum
+                            ? abs(other_entry->qf_lnum - target_lnum) : INT_MAX;
+  if (line_distance > other_line_distance) {
+    return false;
+  } else if (line_distance < other_line_distance) {
+    return true;
+  }
+
+  // Both entries are pointing at the exact same line number (or no line
+  // number at all). Now compare columns.
+  if (!target_col) {
+    // Without a target column, we can't know which is closer.
+    return false;
+  }
+
+  int column_distance = entry->qf_col
+                        ? abs(entry->qf_col - target_col) : INT_MAX;
+  int other_column_distance = other_entry->qf_col
+                              ? abs(other_entry->qf_col - target_col) : INT_MAX;
+  if (column_distance > other_column_distance) {
+    return false;
+  } else if (column_distance < other_column_distance) {
+    return true;
+  }
+
+  // It's a complete tie! The exact same file, line, and column.
+  return false;
+}
+
 /// Add list of entries to quickfix/location list. Each list entry is
 /// a dictionary with item information.
 static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, int action)
@@ -6471,18 +6528,47 @@ static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, 
   int retval = OK;
   bool valid_entry = false;
 
+  // If there's an entry selected in the quickfix list, remember its location
+  // (file, line, column), so we can select the nearest entry in the updated
+  // quickfix list.
+  int prev_fnum = 0;
+  int prev_lnum = 0;
+  int prev_col = 0;
+  if (qfl->qf_ptr) {
+    prev_fnum = qfl->qf_ptr->qf_fnum;
+    prev_lnum = qfl->qf_ptr->qf_lnum;
+    prev_col = qfl->qf_ptr->qf_col;
+  }
+
+  bool select_first_entry = false;
+  bool select_nearest_entry = false;
+
   if (action == ' ' || qf_idx == qi->qf_listcount) {
+    select_first_entry = true;
     // make place for a new list
     qf_new_list(qi, title);
     qf_idx = qi->qf_curlist;
     qfl = qf_get_list(qi, qf_idx);
-  } else if (action == 'a' && !qf_list_empty(qfl)) {
-    // Adding to existing list, use last entry.
-    old_last = qfl->qf_last;
+  } else if (action == 'a') {
+    if (qf_list_empty(qfl)) {
+      // Appending to empty list, select first entry.
+      select_first_entry = true;
+    } else {
+      // Adding to existing list, use last entry.
+      old_last = qfl->qf_last;
+    }
   } else if (action == 'r') {
+    select_first_entry = true;
+    qf_free_items(qfl);
+    qf_store_title(qfl, title);
+  } else if (action == 'u') {
+    select_nearest_entry = true;
     qf_free_items(qfl);
     qf_store_title(qfl, title);
   }
+
+  qfline_T *entry_to_select = NULL;
+  int entry_to_select_index = 0;
 
   TV_LIST_ITER_CONST(list, li, {
     if (TV_LIST_ITEM_TV(li)->v_type != VAR_DICT) {
@@ -6498,6 +6584,16 @@ static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, 
     if (retval == QF_FAIL) {
       break;
     }
+
+    qfline_T *entry = qfl->qf_last;
+    if ((select_first_entry && entry_to_select == NULL)
+        || (select_nearest_entry
+            && (entry_to_select == NULL
+                || entry_is_closer_to_target(entry, entry_to_select, prev_fnum,
+                                             prev_lnum, prev_col)))) {
+      entry_to_select = entry;
+      entry_to_select_index = qfl->qf_count;
+    }
   });
 
   // Check if any valid error entries are added to the list.
@@ -6507,16 +6603,10 @@ static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, 
     qfl->qf_nonevalid = true;
   }
 
-  // If not appending to the list, set the current error to the first entry
-  if (action != 'a') {
-    qfl->qf_ptr = qfl->qf_start;
-  }
-
-  // Update the current error index if not appending to the list or if the
-  // list was empty before and it is not empty now.
-  if ((action != 'a' || qfl->qf_index == 0)
-      && !qf_list_empty(qfl)) {
-    qfl->qf_index = 1;
+  // Set the current error.
+  if (entry_to_select) {
+    qfl->qf_ptr = entry_to_select;
+    qfl->qf_index = entry_to_select_index;
   }
 
   // Don't update the cursor in quickfix window when appending entries
@@ -6632,7 +6722,7 @@ static int qf_setprop_items_from_lines(qf_info_T *qi, int qf_idx, const dict_T *
     return FAIL;
   }
 
-  if (action == 'r') {
+  if (action == 'r' || action == 'u') {
     qf_free_items(&qi->qf_lists[qf_idx]);
   }
   if (qf_init_ext(qi, qf_idx, NULL, NULL, &di->di_tv, errorformat,
@@ -6789,10 +6879,11 @@ static void qf_free_stack(win_T *wp, qf_info_T *qi)
   }
 }
 
-// Populate the quickfix list with the items supplied in the list
-// of dictionaries. "title" will be copied to w:quickfix_title
-// "action" is 'a' for add, 'r' for replace.  Otherwise create a new list.
-// When "what" is not NULL then only set some properties.
+/// Populate the quickfix list with the items supplied in the list
+/// of dictionaries. "title" will be copied to w:quickfix_title
+/// "action" is 'a' for add, 'r' for replace, 'u' for update.  Otherwise
+/// create a new list.
+/// When "what" is not NULL then only set some properties.
 int set_errorlist(win_T *wp, list_T *list, int action, char *title, dict_T *what)
 {
   qf_info_T *qi = &ql_info;
@@ -7256,7 +7347,6 @@ void ex_helpgrep(exarg_T *eap)
   bool updated = false;
   // Make 'cpoptions' empty, the 'l' flag should not be used here.
   char *const save_cpo = p_cpo;
-  const bool save_cpo_allocated = (get_option(kOptCpoptions)->flags & P_ALLOCED);
   p_cpo = empty_string_option;
 
   bool new_qi = false;
@@ -7296,9 +7386,7 @@ void ex_helpgrep(exarg_T *eap)
     if (*p_cpo == NUL) {
       set_option_value_give_err(kOptCpoptions, CSTR_AS_OPTVAL(save_cpo), 0);
     }
-    if (save_cpo_allocated) {
-      free_string_option(save_cpo);
-    }
+    free_string_option(save_cpo);
   }
 
   if (updated) {
@@ -7433,7 +7521,7 @@ static void set_qf_ll_list(win_T *wp, typval_T *args, typval_T *rettv)
     return;
   }
   const char *const act = tv_get_string_chk(action_arg);
-  if ((*act == 'a' || *act == 'r' || *act == ' ' || *act == 'f')
+  if ((*act == 'a' || *act == 'r' || *act == 'u' || *act == ' ' || *act == 'f')
       && act[1] == NUL) {
     action = *act;
   } else {

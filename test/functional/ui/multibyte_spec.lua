@@ -16,8 +16,7 @@ describe('multibyte rendering', function()
   local screen
   before_each(function()
     clear()
-    screen = Screen.new(60, 6)
-    screen:attach({ rgb = true })
+    screen = Screen.new(60, 6, { rgb = true })
   end)
 
   it('works with composed char at start of line', function()
@@ -384,7 +383,6 @@ describe('multibyte rendering: statusline', function()
   before_each(function()
     clear()
     screen = Screen.new(40, 4)
-    screen:attach()
     command('set laststatus=2')
   end)
 
@@ -474,26 +472,42 @@ describe('multibyte rendering: statusline', function()
   end)
 
   it('emoji with ZWJ in filename with custom stl', function()
+    screen:add_extra_attr_ids {
+      [100] = {
+        bold = true,
+        reverse = true,
+        foreground = Screen.colors.Gray100,
+        background = Screen.colors.Red,
+      },
+    }
     command('set statusline=xx%#ErrorMsg#%f%##yy')
     command('file 🧑‍💻')
     screen:expect {
       grid = [[
       ^                                        |
       {1:~                                       }|
-      {3:xx}{9:🧑‍💻}{3:yy                                  }|
+      {3:xx}{100:🧑‍💻}{3:yy                                  }|
                                               |
     ]],
     }
   end)
 
   it('unprintable chars in filename with custom stl', function()
+    screen:add_extra_attr_ids {
+      [100] = {
+        bold = true,
+        reverse = true,
+        foreground = Screen.colors.Gray100,
+        background = Screen.colors.Red,
+      },
+    }
     command('set statusline=xx%#ErrorMsg#%f%##yy')
     command('file 🧑​💻')
     screen:expect {
       grid = [[
       ^                                        |
       {1:~                                       }|
-      {3:xx}{9:🧑<200b>💻}{3:yy                          }|
+      {3:xx}{100:🧑<200b>💻}{3:yy                          }|
                                               |
     ]],
     }

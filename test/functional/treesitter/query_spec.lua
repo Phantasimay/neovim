@@ -405,6 +405,20 @@ void ui_refresh(void)
       { 'literal', 'number_literal', { 0, 8, 0, 11 }, '123' },
       { 'literal', 'number_literal', { 2, 21, 2, 24 }, '125' },
     }, result)
+
+    result = exec_lua(
+      get_query_result,
+      [[((number_literal) @literal (#has-ancestor? @literal "enumerator"))]]
+    )
+    eq({
+      { 'literal', 'number_literal', { 1, 13, 1, 16 }, '124' },
+    }, result)
+
+    result = exec_lua(
+      get_query_result,
+      [[((number_literal) @literal (#has-ancestor? @literal "number_literal"))]]
+    )
+    eq({}, result)
   end)
 
   it('allows loading query with escaped quotes and capture them `#{lua,vim}-match`?', function()
@@ -708,7 +722,25 @@ void ui_refresh(void)
       eq(exp, pcall_err(exec_lua, "vim.treesitter.query.parse('c', ...)", cquery))
     end
 
-    -- Invalid node type
+    -- Invalid node types
+    test(
+      '.../query.lua:0: Query error at 1:2. Invalid node type ">\\">>":\n'
+        .. '">\\">>" @operator\n'
+        .. ' ^',
+      '">\\">>" @operator'
+    )
+    test(
+      '.../query.lua:0: Query error at 1:2. Invalid node type "\\\\":\n'
+        .. '"\\\\" @operator\n'
+        .. ' ^',
+      '"\\\\" @operator'
+    )
+    test(
+      '.../query.lua:0: Query error at 1:2. Invalid node type ">>>":\n'
+        .. '">>>" @operator\n'
+        .. ' ^',
+      '">>>" @operator'
+    )
     test(
       '.../query.lua:0: Query error at 1:2. Invalid node type "dentifier":\n'
         .. '(dentifier) @variable\n'

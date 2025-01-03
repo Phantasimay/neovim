@@ -10,8 +10,8 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "nvim/ascii_defs.h"
 #include "nvim/buffer.h"
@@ -28,8 +28,7 @@
 #include "nvim/gettext_defs.h"
 #include "nvim/globals.h"
 #include "nvim/grid.h"
-#include "nvim/highlight.h"
-#include "nvim/highlight_defs.h"
+#include "nvim/grid_defs.h"
 #include "nvim/macros_defs.h"
 #include "nvim/mark_defs.h"
 #include "nvim/mbyte.h"
@@ -38,12 +37,12 @@
 #include "nvim/mouse.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
+#include "nvim/normal_defs.h"
 #include "nvim/option.h"
 #include "nvim/option_vars.h"
 #include "nvim/plines.h"
 #include "nvim/popupmenu.h"
 #include "nvim/pos_defs.h"
-#include "nvim/search.h"
 #include "nvim/strings.h"
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
@@ -150,32 +149,27 @@ static void redraw_for_cursorline(win_T *wp)
   }
 }
 
-/// Redraw when w_virtcol changes and
+/// Redraw when 'concealcursor' is active, or when w_virtcol changes and:
 /// - 'cursorcolumn' is set, or
 /// - 'cursorlineopt' contains "screenline", or
-/// - 'concealcursor' is active, or
 /// - Visual mode is active.
 static void redraw_for_cursorcolumn(win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (wp->w_valid & VALID_VIRTCOL) {
-    return;
-  }
-
   // If the cursor moves horizontally when 'concealcursor' is active, then the
   // current line needs to be redrawn to calculate the correct cursor position.
   if (wp->w_p_cole > 0 && conceal_cursor_line(wp)) {
     redrawWinline(wp, wp->w_cursor.lnum);
   }
 
-  if (pum_visible()) {
+  if ((wp->w_valid & VALID_VIRTCOL) || pum_visible()) {
     return;
   }
 
   if (wp->w_p_cuc) {
     // When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.
     redraw_later(wp, UPD_SOME_VALID);
-  } else if (wp->w_p_cul && (wp->w_p_culopt_flags & CULOPT_SCRLINE)) {
+  } else if (wp->w_p_cul && (wp->w_p_culopt_flags & kOptCuloptFlagScreenline)) {
     // When 'cursorlineopt' contains "screenline" need to redraw with UPD_VALID.
     redraw_later(wp, UPD_VALID);
   }

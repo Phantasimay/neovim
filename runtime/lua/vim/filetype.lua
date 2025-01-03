@@ -4,15 +4,22 @@ local fn = vim.fn
 local M = {}
 
 --- @alias vim.filetype.mapfn fun(path:string,bufnr:integer, ...):string?, fun(b:integer)?
---- @alias vim.filetype.mapopts { parent: string, priority: number }
+--- @alias vim.filetype.mapopts { priority: number }
 --- @alias vim.filetype.maptbl [string|vim.filetype.mapfn, vim.filetype.mapopts]
 --- @alias vim.filetype.mapping.value string|vim.filetype.mapfn|vim.filetype.maptbl
 --- @alias vim.filetype.mapping table<string,vim.filetype.mapping.value>
 
+--- @class vim.filetype.mapping.sorted
+--- @nodoc
+--- @field [1] string parent pattern
+--- @field [2] string pattern
+--- @field [3] string|vim.filetype.mapfn
+--- @field [4] integer priority
+
 --- @param ft string|vim.filetype.mapfn
---- @param opts? vim.filetype.mapopts
+--- @param priority? integer
 --- @return vim.filetype.maptbl
-local function starsetf(ft, opts)
+local function starsetf(ft, priority)
   return {
     function(path, bufnr)
       -- Note: when `ft` is a function its return value may be nil.
@@ -27,11 +34,8 @@ local function starsetf(ft, opts)
       end
     end,
     {
-      -- Allow setting "parent" to be reused in closures, but don't have default as it will be
-      -- assigned later from grouping
-      parent = opts and opts.parent,
       -- Starset matches should have lowest priority by default
-      priority = (opts and opts.priority) or -math.huge,
+      priority = priority or -math.huge,
     },
   }
 end
@@ -271,6 +275,9 @@ local extension = {
   mdh = 'c',
   epro = 'c',
   qc = 'c',
+  c3 = 'c3',
+  c3i = 'c3',
+  c3t = 'c3',
   cabal = 'cabal',
   cairo = 'cairo',
   capnp = 'capnp',
@@ -296,6 +303,7 @@ local extension = {
   cho = 'chordpro',
   chordpro = 'chordpro',
   ck = 'chuck',
+  cl = detect.cl,
   eni = 'cl',
   icl = 'clean',
   cljx = 'clojure',
@@ -402,6 +410,7 @@ local extension = {
   dtso = 'dts',
   its = 'dts',
   keymap = 'dts',
+  overlay = 'dts',
   dylan = 'dylan',
   intr = 'dylanintr',
   lid = 'dylanlid',
@@ -495,6 +504,7 @@ local extension = {
   gdshader = 'gdshader',
   shader = 'gdshader',
   ged = 'gedcom',
+  gel = 'gel',
   gmi = 'gemtext',
   gemini = 'gemtext',
   gift = 'gift',
@@ -583,10 +593,12 @@ local extension = {
   hw = detect.hw,
   module = detect.hw,
   pkg = detect.hw,
+  hy = 'hy',
   iba = 'ibasic',
   ibi = 'ibasic',
   icn = 'icon',
   idl = detect.idl,
+  idr = 'idris2',
   inc = detect.inc,
   inf = 'inform',
   INF = 'inform',
@@ -594,6 +606,7 @@ local extension = {
   inko = 'inko',
   inp = detect.inp,
   ms = detect_seq(detect.nroff, 'xmath'),
+  ipkg = 'ipkg',
   iss = 'iss',
   mst = 'ist',
   ist = 'ist',
@@ -605,6 +618,7 @@ local extension = {
   janet = 'janet',
   jav = 'java',
   java = 'java',
+  jsh = 'java',
   jj = 'javacc',
   jjt = 'javacc',
   es = 'javascript',
@@ -646,6 +660,8 @@ local extension = {
   jsp = 'jsp',
   jl = 'julia',
   just = 'just',
+  kl = 'karel',
+  KL = 'karel',
   kdl = 'kdl',
   kv = 'kivy',
   kix = 'kix',
@@ -659,6 +675,7 @@ local extension = {
   k = 'kwt',
   ACE = 'lace',
   ace = 'lace',
+  lalrpop = 'lalrpop',
   latte = 'latte',
   lte = 'latte',
   ld = 'ld',
@@ -667,27 +684,27 @@ local extension = {
   journal = 'ledger',
   ldg = 'ledger',
   ledger = 'ledger',
+  leo = 'leo',
   less = 'less',
   lex = 'lex',
   lxx = 'lex',
   ['l++'] = 'lex',
   l = 'lex',
   lhs = 'lhaskell',
-  ll = 'lifelines',
+  lidr = 'lidris2',
   ly = 'lilypond',
   ily = 'lilypond',
   liquid = 'liquid',
   liq = 'liquidsoap',
-  cl = 'lisp',
   L = 'lisp',
   lisp = 'lisp',
   el = 'lisp',
   lsp = 'lisp',
   asd = 'lisp',
-  stsg = 'lisp',
   lt = 'lite',
   lite = 'lite',
   livemd = 'livebook',
+  ll = detect.ll,
   log = detect.log,
   Log = detect.log,
   LOG = detect.log,
@@ -719,7 +736,7 @@ local extension = {
   mk = detect.make,
   mak = detect.make,
   page = 'mallard',
-  map = 'map',
+  map = detect_line1('^%*+$', 'lnkmap', 'map'),
   mws = 'maple',
   mpl = 'maple',
   mv = 'maple',
@@ -729,6 +746,7 @@ local extension = {
   mkd = detect.markdown,
   markdown = detect.markdown,
   mdown = detect.markdown,
+  masm = 'masm',
   mhtml = 'mason',
   mason = 'mason',
   master = 'master',
@@ -752,6 +770,7 @@ local extension = {
   mib = 'mib',
   mix = 'mix',
   mixal = 'mix',
+  mlir = 'mlir',
   mm = detect.mm,
   nb = 'mma',
   wl = 'mma',
@@ -782,6 +801,7 @@ local extension = {
   mof = 'msidl',
   odl = 'msidl',
   msql = 'msql',
+  mss = 'mss',
   mu = 'mupad',
   mush = 'mush',
   mustache = 'mustache',
@@ -789,6 +809,7 @@ local extension = {
   n1ql = 'n1ql',
   nql = 'n1ql',
   nanorc = 'nanorc',
+  nasm = 'nasm',
   NSA = 'natural',
   NSC = 'natural',
   NSG = 'natural',
@@ -942,11 +963,14 @@ local extension = {
   ps1xml = 'ps1xml',
   psf = 'psf',
   psl = 'psl',
+  ptx = 'ptx',
   pug = 'pug',
   purs = 'purescript',
   arr = 'pyret',
   pxd = 'pyrex',
+  pxi = 'pyrex',
   pyx = 'pyrex',
+  ['pyx+'] = 'pyrex',
   pyw = 'python',
   py = 'python',
   pyi = 'python',
@@ -1049,6 +1073,7 @@ local extension = {
   ss = 'scheme',
   scm = 'scheme',
   sld = 'scheme',
+  stsg = 'scheme',
   sce = 'scilab',
   sci = 'scilab',
   scss = 'scss',
@@ -1067,6 +1092,9 @@ local extension = {
   envrc = detect.sh,
   ksh = detect.ksh,
   sh = detect.sh,
+  lo = 'sh',
+  la = 'sh',
+  lai = 'sh',
   mdd = 'sh',
   sieve = 'sieve',
   siv = 'sieve',
@@ -1146,6 +1174,7 @@ local extension = {
   sface = 'surface',
   svelte = 'svelte',
   svg = 'svg',
+  sw = 'sway',
   swift = 'swift',
   swiftinterface = 'swift',
   swig = 'swig',
@@ -1303,10 +1332,12 @@ local extension = {
   xpfm = 'xml',
   spfm = 'xml',
   bxml = 'xml',
+  mmi = 'xml',
   xcu = 'xml',
   xlb = 'xml',
   xlc = 'xml',
   xba = 'xml',
+  slnx = 'xml',
   xpm = detect_line1('XPM2', 'xpm2', 'xpm'),
   xpm2 = 'xpm2',
   xqy = 'xquery',
@@ -1362,7 +1393,7 @@ local extension = {
   txt = detect.txt,
   xml = detect.xml,
   y = detect.y,
-  cmd = detect_line1('^/%*', 'rexx', 'dosbatch'),
+  cmd = detect.cmd,
   rul = detect.rul,
   cpy = detect_line1('^##', 'python', 'cobol'),
   dsl = detect_line1('^%s*<!', 'dsl', 'structurizr'),
@@ -1411,6 +1442,7 @@ local filename = {
   ['/etc/asound.conf'] = 'alsaconf',
   ['build.xml'] = 'ant',
   ['.htaccess'] = 'apache',
+  APKBUILD = 'apkbuild',
   ['apt.conf'] = 'aptconf',
   ['/.aptitude/config'] = 'aptconf',
   ['=tagging-method'] = 'arch',
@@ -1469,6 +1501,7 @@ local filename = {
   ['NEWS.dch'] = 'debchangelog',
   ['NEWS.Debian'] = 'debchangelog',
   ['/debian/control'] = 'debcontrol',
+  ['/DEBIAN/control'] = 'debcontrol',
   ['/debian/copyright'] = 'debcopyright',
   ['/etc/apt/sources.list'] = 'debsources',
   ['denyhosts.conf'] = 'denyhosts',
@@ -1516,6 +1549,8 @@ local filename = {
   ['filter-rules'] = 'elmfilt',
   ['exim.conf'] = 'exim',
   exports = 'exports',
+  fennelrc = 'fennel',
+  ['.fennelrc'] = 'fennel',
   ['.fetchmailrc'] = 'fetchmail',
   fvSchemes = detect.foam,
   fvSolution = detect.foam,
@@ -1571,6 +1606,7 @@ local filename = {
   ['/etc/host.conf'] = 'hostconf',
   ['/etc/hosts.allow'] = 'hostsaccess',
   ['/etc/hosts.deny'] = 'hostsaccess',
+  ['.hy-history'] = 'hy',
   ['hyprland.conf'] = 'hyprlang',
   ['hyprpaper.conf'] = 'hyprlang',
   ['hypridle.conf'] = 'hyprlang',
@@ -1601,6 +1637,7 @@ local filename = {
   ['.luaurc'] = 'jsonc',
   ['.swrc'] = 'jsonc',
   ['.vsconfig'] = 'jsonc',
+  ['bun.lock'] = 'jsonc',
   ['.justfile'] = 'just',
   ['justfile'] = 'just',
   ['Justfile'] = 'just',
@@ -1610,6 +1647,7 @@ local filename = {
   ['ldaprc'] = 'ldapconf',
   ['.ldaprc'] = 'ldapconf',
   ['ldap.conf'] = 'ldapconf',
+  ['lfrc'] = 'lf',
   ['lftp.conf'] = 'lftp',
   ['.lftprc'] = 'lftp',
   ['/.libao'] = 'libao',
@@ -1745,6 +1783,7 @@ local filename = {
   ['Rantfile'] = 'ruby',
   Vagrantfile = 'ruby',
   ['smb.conf'] = 'samba',
+  ['.lips_repl_history'] = 'scheme',
   screenrc = 'screen',
   ['.screenrc'] = 'screen',
   ['/etc/sensors3.conf'] = 'sensors',
@@ -1766,7 +1805,6 @@ local filename = {
   ['.kshrc'] = detect.ksh,
   ['.profile'] = detect.sh,
   ['/etc/profile'] = detect.sh,
-  APKBUILD = detect.bash,
   PKGBUILD = detect.bash,
   ['.tcshrc'] = detect.tcsh,
   ['tcsh.login'] = detect.tcsh,
@@ -1843,11 +1881,17 @@ local filename = {
   ['/etc/blkid.tab'] = 'xml',
   ['/etc/blkid.tab.old'] = 'xml',
   ['fonts.conf'] = 'xml',
+  ['Directory.Packages.props'] = 'xml',
+  ['Directory.Build.props'] = 'xml',
+  ['Directory.Build.targets'] = 'xml',
   ['.clangd'] = 'yaml',
   ['.clang-format'] = 'yaml',
   ['.clang-tidy'] = 'yaml',
+  ['pixi.lock'] = 'yaml',
   ['yarn.lock'] = 'yaml',
   matplotlibrc = 'yaml',
+  ['.condarc'] = 'yaml',
+  condarc = 'yaml',
   zathurarc = 'zathurarc',
   ['/etc/zprofile'] = 'zsh',
   ['.zlogin'] = 'zsh',
@@ -1862,11 +1906,10 @@ local filename = {
 }
 
 -- Re-use closures as much as possible
-local detect_apache_diretc = starsetf('apache', { parent = '/etc/' })
-local detect_apache_dotconf = starsetf('apache', { parent = '%.conf' })
-local detect_muttrc = starsetf('muttrc', { parent = 'utt' })
-local detect_neomuttrc = starsetf('neomuttrc', { parent = 'utt' })
-local detect_xkb = starsetf('xkb', { parent = '/usr/' })
+local detect_apache = starsetf('apache')
+local detect_muttrc = starsetf('muttrc')
+local detect_neomuttrc = starsetf('neomuttrc')
+local detect_xkb = starsetf('xkb')
 
 ---@type table<string,vim.filetype.mapping>
 local pattern = {
@@ -1883,14 +1926,14 @@ local pattern = {
     ['/etc/asound%.conf$'] = 'alsaconf',
     ['/etc/apache2/sites%-.*/.*%.com$'] = 'apache',
     ['/etc/httpd/.*%.conf$'] = 'apache',
-    ['/etc/apache2/.*%.conf'] = detect_apache_diretc,
-    ['/etc/apache2/conf%..*/'] = detect_apache_diretc,
-    ['/etc/apache2/mods%-.*/'] = detect_apache_diretc,
-    ['/etc/apache2/sites%-.*/'] = detect_apache_diretc,
-    ['/etc/httpd/conf%..*/'] = detect_apache_diretc,
-    ['/etc/httpd/conf%.d/.*%.conf'] = detect_apache_diretc,
-    ['/etc/httpd/mods%-.*/'] = detect_apache_diretc,
-    ['/etc/httpd/sites%-.*/'] = detect_apache_diretc,
+    ['/etc/apache2/.*%.conf'] = detect_apache,
+    ['/etc/apache2/conf%..*/'] = detect_apache,
+    ['/etc/apache2/mods%-.*/'] = detect_apache,
+    ['/etc/apache2/sites%-.*/'] = detect_apache,
+    ['/etc/httpd/conf%..*/'] = detect_apache,
+    ['/etc/httpd/conf%.d/.*%.conf'] = detect_apache,
+    ['/etc/httpd/mods%-.*/'] = detect_apache,
+    ['/etc/httpd/sites%-.*/'] = detect_apache,
     ['/etc/proftpd/.*%.conf'] = starsetf('apachestyle'),
     ['/etc/proftpd/conf%..*/'] = starsetf('apachestyle'),
     ['/etc/cdrdao%.conf$'] = 'cdrdaoconf',
@@ -2106,6 +2149,7 @@ local pattern = {
     ['/build/conf/.*%.conf$'] = 'bitbake',
     ['/meta%-.*/conf/.*%.conf$'] = 'bitbake',
     ['/meta/conf/.*%.conf$'] = 'bitbake',
+    ['/project%-spec/configs/.*%.conf$'] = 'bitbake',
     ['/%.cabal/config$'] = 'cabalconfig',
     ['/cabal/config$'] = 'cabalconfig',
     ['/%.aws/config$'] = 'confini',
@@ -2124,14 +2168,15 @@ local pattern = {
     ['/gitolite%-admin/conf/'] = starsetf('gitolite'),
     ['/%.i3/config$'] = 'i3config',
     ['/i3/config$'] = 'i3config',
-    ['/supertux2/config$'] = 'lisp',
     ['/%.mplayer/config$'] = 'mplayerconf',
+    ['/supertux2/config$'] = 'scheme',
     ['/neofetch/config%.conf$'] = 'sh',
     ['/%.ssh/config$'] = 'sshconfig',
     ['/%.sway/config$'] = 'swayconfig',
     ['/sway/config$'] = 'swayconfig',
     ['/%.cargo/config$'] = 'toml',
     ['/%.bundle/config$'] = 'yaml',
+    ['/%.kube/config$'] = 'yaml',
   },
   ['/%.'] = {
     ['/%.aws/credentials$'] = 'confini',
@@ -2180,11 +2225,13 @@ local pattern = {
   },
   ['%.conf'] = {
     ['^proftpd%.conf'] = starsetf('apachestyle'),
-    ['^access%.conf'] = detect_apache_dotconf,
-    ['^apache%.conf'] = detect_apache_dotconf,
-    ['^apache2%.conf'] = detect_apache_dotconf,
-    ['^httpd%.conf'] = detect_apache_dotconf,
-    ['^srm%.conf'] = detect_apache_dotconf,
+    ['^access%.conf'] = detect_apache,
+    ['^apache%.conf'] = detect_apache,
+    ['^apache2%.conf'] = detect_apache,
+    ['^httpd%.conf'] = detect_apache,
+    ['^httpd%-.*%.conf'] = detect_apache,
+    ['^proxy%-html%.conf'] = detect_apache,
+    ['^srm%.conf'] = detect_apache,
     ['asterisk/.*%.conf'] = starsetf('asterisk'),
     ['asterisk.*/.*voicemail%.conf'] = starsetf('asteriskvm'),
     ['^dictd.*%.conf$'] = 'dictdconf',
@@ -2192,6 +2239,7 @@ local pattern = {
     ['/screengrab/.*%.conf$'] = 'dosini',
     ['^${GNUPGHOME}/gpg%.conf$'] = 'gpg',
     ['/boot/grub/grub%.conf$'] = 'grub',
+    ['/hypr/.*%.conf$'] = 'hyprlang',
     ['^lilo%.conf'] = starsetf('lilo'),
     ['^named.*%.conf$'] = 'named',
     ['^rndc.*%.conf$'] = 'named',
@@ -2260,6 +2308,7 @@ local pattern = {
     ['^%.?neomuttrc'] = detect_neomuttrc,
     ['/%.neomutt/neomuttrc'] = detect_neomuttrc,
     ['^Neomuttrc'] = detect_neomuttrc,
+    ['%.neomuttdebug'] = 'neomuttlog',
   },
   ['^%.'] = {
     ['^%.cshrc'] = detect.csh,
@@ -2292,7 +2341,10 @@ local pattern = {
     ['%.cmake%.in$'] = 'cmake',
     ['^crontab%.'] = starsetf('crontab'),
     ['^cvs%d+$'] = 'cvs',
+    ['/DEBIAN/control$'] = 'debcontrol',
     ['^php%.ini%-'] = 'dosini',
+    ['^php%-fpm%.conf'] = 'dosini',
+    ['^www%.conf'] = 'dosini',
     ['^drac%.'] = starsetf('dracula'),
     ['/dtrace/.*%.d$'] = 'dtrace',
     ['esmtprc$'] = 'esmtprc',
@@ -2354,7 +2406,7 @@ local pattern = {
     ['/app%-defaults/'] = starsetf('xdefaults'),
     ['^Xresources'] = starsetf('xdefaults'),
     -- Increase priority to run before the pattern below
-    ['^XF86Config%-4'] = starsetf(detect.xfree86_v4, { priority = -math.huge + 1 }),
+    ['^XF86Config%-4'] = starsetf(detect.xfree86_v4, -math.huge + 1),
     ['^XF86Config'] = starsetf(detect.xfree86_v3),
     ['Xmodmap$'] = 'xmodmap',
     ['xmodmap'] = starsetf('xmodmap'),
@@ -2380,8 +2432,10 @@ local pattern = {
 --- @type table<string,vim.filetype.pattern_cache>
 local pattern_lookup = {}
 
+--- @param a vim.filetype.mapping.sorted
+--- @param b vim.filetype.mapping.sorted
 local function compare_by_priority(a, b)
-  return a[next(a)][2].priority > b[next(b)][2].priority
+  return a[4] > b[4]
 end
 
 --- @param pat string
@@ -2391,30 +2445,30 @@ local function parse_pattern(pat)
 end
 
 --- @param t table<string,vim.filetype.mapping>
---- @return vim.filetype.mapping[]
---- @return vim.filetype.mapping[]
+--- @return vim.filetype.mapping.sorted[]
+--- @return vim.filetype.mapping.sorted[]
 local function sort_by_priority(t)
   -- Separate patterns with non-negative and negative priority because they
   -- will be processed separately
-  local pos = {} --- @type vim.filetype.mapping[]
-  local neg = {} --- @type vim.filetype.mapping[]
+  local pos = {} --- @type vim.filetype.mapping.sorted[]
+  local neg = {} --- @type vim.filetype.mapping.sorted[]
   for parent, ft_map in pairs(t) do
     pattern_lookup[parent] = pattern_lookup[parent] or parse_pattern(parent)
     for pat, maptbl in pairs(ft_map) do
-      local ft = type(maptbl) == 'table' and maptbl[1] or maptbl
+      local ft_or_fun = type(maptbl) == 'table' and maptbl[1] or maptbl
       assert(
-        type(ft) == 'string' or type(ft) == 'function',
+        type(ft_or_fun) == 'string' or type(ft_or_fun) == 'function',
         'Expected string or function for filetype'
       )
 
       -- Parse pattern for common data and cache it once
       pattern_lookup[pat] = pattern_lookup[pat] or parse_pattern(pat)
 
-      local opts = (type(maptbl) == 'table' and type(maptbl[2]) == 'table') and maptbl[2] or {}
-      opts.parent = opts.parent or parent
-      opts.priority = opts.priority or 0
+      --- @type vim.filetype.mapopts?
+      local opts = (type(maptbl) == 'table' and type(maptbl[2]) == 'table') and maptbl[2] or nil
+      local priority = opts and opts.priority or 0
 
-      table.insert(opts.priority >= 0 and pos or neg, { [pat] = { ft, opts } })
+      table.insert(priority >= 0 and pos or neg, { parent, pat, ft_or_fun, priority })
     end
   end
 
@@ -2625,7 +2679,8 @@ local function match_pattern(name, path, tail, pat, try_all_candidates)
     if some_env_missing then
       return nil
     end
-    pat, has_slash = expanded, expanded:find('/') ~= nil
+    pat = expanded
+    has_slash = has_slash or expanded:find('/') ~= nil
   end
 
   -- Try all possible candidates to make parent patterns not depend on slash presence
@@ -2647,14 +2702,13 @@ end
 --- @param name string
 --- @param path string
 --- @param tail string
---- @param pattern_sorted vim.filetype.mapping[]
+--- @param pattern_sorted vim.filetype.mapping.sorted[]
 --- @param parent_matches table<string,boolean>
 --- @param bufnr integer?
 local function match_pattern_sorted(name, path, tail, pattern_sorted, parent_matches, bufnr)
-  for i = 1, #pattern_sorted do
-    local pat, ft_data = next(pattern_sorted[i])
+  for _, p in ipairs(pattern_sorted) do
+    local parent, pat, ft_or_fn = p[1], p[2], p[3]
 
-    local parent = ft_data[2].parent
     local parent_is_matched = parent_matches[parent]
     if parent_is_matched == nil then
       parent_matches[parent] = match_pattern(name, path, tail, parent, true) ~= nil
@@ -2664,7 +2718,7 @@ local function match_pattern_sorted(name, path, tail, pattern_sorted, parent_mat
     if parent_is_matched then
       local matches = match_pattern(name, path, tail, pat, false)
       if matches then
-        local ft, on_detect = dispatch(ft_data[1], path, bufnr, matches)
+        local ft, on_detect = dispatch(ft_or_fn, path, bufnr, matches)
         if ft then
           return ft, on_detect
         end
@@ -2729,9 +2783,7 @@ end
 ---                     filetype specific buffer variables). The function accepts a buffer number as
 ---                     its only argument.
 function M.match(args)
-  vim.validate({
-    arg = { args, 't' },
-  })
+  vim.validate('arg', args, 'table')
 
   if not (args.buf or args.filename or args.contents) then
     error('At least one of "buf", "filename", or "contents" must be given')

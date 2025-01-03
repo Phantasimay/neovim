@@ -271,6 +271,12 @@ func Test_changing_cmdheight()
 
   let lines =<< trim END
       set cmdheight=1 laststatus=2
+      func EchoOne()
+        set laststatus=2 cmdheight=1
+        echo 'foo'
+        echo 'bar'
+        set cmdheight=2
+      endfunc
       func EchoTwo()
         set laststatus=2
         set cmdheight=5
@@ -305,6 +311,10 @@ func Test_changing_cmdheight()
   " setting 'cmdheight' works after outputting two messages
   call term_sendkeys(buf, ":call EchoTwo()\<CR>")
   call VerifyScreenDump(buf, 'Test_changing_cmdheight_6', {})
+
+  " increasing 'cmdheight' doesn't clear the messages that need hit-enter
+  call term_sendkeys(buf, ":call EchoOne()\<CR>")
+  call VerifyScreenDump(buf, 'Test_changing_cmdheight_7', {})
 
   " clean up
   call StopVimInTerminal(buf)
@@ -727,8 +737,8 @@ func Test_fullcommand()
         \ ':5s':        'substitute',
         \ "'<,'>s":     'substitute',
         \ ":'<,'>s":    'substitute',
-        \ 'CheckUni':   'CheckUnix',
-        \ 'CheckUnix':  'CheckUnix',
+        \ 'CheckLin':   'CheckLinux',
+        \ 'CheckLinux': 'CheckLinux',
   \ }
 
   for [in, want] in items(tests)
@@ -1012,8 +1022,7 @@ func Test_cmdline_complete_user_names()
       call feedkeys(':e ~' . first_letter . "\<c-a>\<c-B>\"\<cr>", 'tx')
       call assert_match('^"e \~.*\<' . whoami . '\>', @:)
     endif
-  endif
-  if has('win32')
+  elseif has('win32')
     " Just in case: check that the system has an Administrator account.
     let names = system('net user')
     if names =~ 'Administrator'
@@ -1022,14 +1031,27 @@ func Test_cmdline_complete_user_names()
       call feedkeys(':e ~A' . "\<c-a>\<c-B>\"\<cr>", 'tx')
       call assert_match('^"e \~.*Administrator', @:)
     endif
+  else
+    throw 'Skipped: does not work on this platform'
   endif
 endfunc
 
+func Test_cmdline_complete_shellcmdline()
+  CheckExecutable whoami
+  command -nargs=1 -complete=shellcmdline MyCmd
+
+  call feedkeys(":MyCmd whoam\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_match('^".*\<whoami\>', @:)
+  let l = getcompletion('whoam', 'shellcmdline')
+  call assert_match('\<whoami\>', join(l, ' '))
+
+  delcommand MyCmd
+endfunc
+
 func Test_cmdline_complete_bang()
-  if executable('whoami')
-    call feedkeys(":!whoam\<C-A>\<C-B>\"\<CR>", 'tx')
-    call assert_match('^".*\<whoami\>', @:)
-  endif
+  CheckExecutable whoami
+  call feedkeys(":!whoam\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_match('^".*\<whoami\>', @:)
 endfunc
 
 func Test_cmdline_complete_languages()
@@ -2307,6 +2329,7 @@ endfunc
 " Test for 'imcmdline' and 'imsearch'
 " This test doesn't actually test the input method functionality.
 func Test_cmdline_inputmethod()
+  throw 'Skipped: Nvim does not allow setting the value of a hidden option'
   new
   call setline(1, ['', 'abc', ''])
   set imcmdline
@@ -3800,6 +3823,60 @@ func Test_cmdline_complete_substitute_short()
   endfor
 endfunc
 
+" Test for shellcmdline command argument completion
+func Test_cmdline_complete_shellcmdline_argument()
+  command -nargs=+ -complete=shellcmdline MyCmd
+
+  set wildoptions=fuzzy
+
+  call feedkeys(":MyCmd vim test_cmdline.\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim test_cmdline.vim', @:)
+  call assert_equal(['test_cmdline.vim'],
+        \ getcompletion('vim test_cmdline.', 'shellcmdline'))
+
+  call feedkeys(":MyCmd vim nonexistentfile\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim nonexistentfile', @:)
+  call assert_equal([],
+        \ getcompletion('vim nonexistentfile', 'shellcmdline'))
+
+  let compl1 = getcompletion('', 'file')[0]
+  let compl2 = getcompletion('', 'file')[1]
+  call feedkeys(":MyCmd vim \<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1, @:)
+
+  call feedkeys(":MyCmd vim \<Tab> \<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1 .. ' ' .. compl1, @:)
+
+  let compl = getcompletion('', 'file')[1]
+  call feedkeys(":MyCmd vim \<Tab> \<Tab>\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1 .. ' ' .. compl2, @:)
+
+  set wildoptions&
+  call feedkeys(":MyCmd vim test_cmdline.\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim test_cmdline.vim', @:)
+  call assert_equal(['test_cmdline.vim'],
+        \ getcompletion('vim test_cmdline.', 'shellcmdline'))
+
+  call feedkeys(":MyCmd vim nonexistentfile\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim nonexistentfile', @:)
+  call assert_equal([],
+        \ getcompletion('vim nonexistentfile', 'shellcmdline'))
+
+  let compl1 = getcompletion('', 'file')[0]
+  let compl2 = getcompletion('', 'file')[1]
+  call feedkeys(":MyCmd vim \<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1, @:)
+
+  call feedkeys(":MyCmd vim \<Tab> \<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1 .. ' ' .. compl1, @:)
+
+  let compl = getcompletion('', 'file')[1]
+  call feedkeys(":MyCmd vim \<Tab> \<Tab>\<Tab>\<C-B>\"\<CR>", 'xt')
+  call assert_equal('"MyCmd vim ' .. compl1 .. ' ' .. compl2, @:)
+
+  delcommand MyCmd
+endfunc
+
 " Test for :! shell command argument completion
 func Test_cmdline_complete_bang_cmd_argument()
   set wildoptions=fuzzy
@@ -3811,30 +3888,32 @@ func Test_cmdline_complete_bang_cmd_argument()
 endfunc
 
 func Call_cmd_funcs()
-  return [getcmdpos(), getcmdscreenpos(), getcmdcompltype()]
+  return [getcmdpos(), getcmdscreenpos(), getcmdcompltype(), getcmdcomplpat()]
 endfunc
 
 func Test_screenpos_and_completion()
   call assert_equal(0, getcmdpos())
   call assert_equal(0, getcmdscreenpos())
   call assert_equal('', getcmdcompltype())
+  call assert_equal('', getcmdcomplpat())
 
   cnoremap <expr> <F2> string(Call_cmd_funcs())
   call feedkeys(":let a\<F2>\<C-B>\"\<CR>", "xt")
-  call assert_equal("\"let a[6, 7, 'var']", @:)
+  call assert_equal("\"let a[6, 7, 'var', 'a']", @:)
   call feedkeys(":quit \<F2>\<C-B>\"\<CR>", "xt")
-  call assert_equal("\"quit [6, 7, '']", @:)
+  call assert_equal("\"quit [6, 7, '', '']", @:)
   call feedkeys(":nosuchcommand \<F2>\<C-B>\"\<CR>", "xt")
-  call assert_equal("\"nosuchcommand [15, 16, '']", @:)
+  call assert_equal("\"nosuchcommand [15, 16, '', '']", @:)
 
-  " Check that getcmdcompltype() doesn't interfere with cmdline completion.
+  " Check that getcmdcompltype() and getcmdcomplpat() don't interfere with
+  " cmdline completion.
   let g:results = []
   cnoremap <F2> <Cmd>let g:results += [[getcmdline()] + Call_cmd_funcs()]<CR>
   call feedkeys(":sign un\<Tab>\<F2>\<Tab>\<F2>\<Tab>\<F2>\<C-C>", "xt")
   call assert_equal([
-        \ ['sign undefine', 14, 15, 'sign'],
-        \ ['sign unplace', 13, 14, 'sign'],
-        \ ['sign un', 8, 9, 'sign']], g:results)
+        \ ['sign undefine', 14, 15, 'sign', 'undefine'],
+        \ ['sign unplace', 13, 14, 'sign', 'unplace'],
+        \ ['sign un', 8, 9, 'sign', 'un']], g:results)
 
   unlet g:results
   cunmap <F2>
@@ -3952,6 +4031,27 @@ func Test_rulerformat_position()
   call term_sendkeys(buf, ":set laststatus=0 winwidth=1\<CR>")
   call term_sendkeys(buf, "\<C-W>v\<C-W>|\<C-W>p")
   call VerifyScreenDump(buf, 'Test_rulerformat_position', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
+endfunc
+
+" Test for using "%!" in 'rulerformat' to use a function
+func Test_rulerformat_function()
+  CheckScreendump
+
+  let lines =<< trim END
+    func TestRulerFn()
+      return '10,20%=30%%'
+    endfunc
+  END
+  call writefile(lines, 'Xrulerformat_function', 'D')
+
+  let buf = RunVimInTerminal('-S Xrulerformat_function', #{rows: 2, cols: 40})
+  call term_sendkeys(buf, ":set ruler rulerformat=%!TestRulerFn()\<CR>")
+  call term_sendkeys(buf, ":redraw!\<CR>")
+  call term_wait(buf)
+  call VerifyScreenDump(buf, 'Test_rulerformat_function', {})
 
   " clean up
   call StopVimInTerminal(buf)

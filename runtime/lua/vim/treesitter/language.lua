@@ -108,11 +108,9 @@ function M.add(lang, opts)
   local path = opts.path
   local symbol_name = opts.symbol_name
 
-  vim.validate({
-    lang = { lang, 'string' },
-    path = { path, 'string', true },
-    symbol_name = { symbol_name, 'string', true },
-  })
+  vim.validate('lang', lang, 'string')
+  vim.validate('path', path, 'string', true)
+  vim.validate('symbol_name', symbol_name, 'string', true)
 
   -- parser names are assumed to be lowercase (consistent behavior on case-insensitive file systems)
   lang = lang:lower()
@@ -156,10 +154,8 @@ end
 --- @param lang string Name of parser
 --- @param filetype string|string[] Filetype(s) to associate with lang
 function M.register(lang, filetype)
-  vim.validate({
-    lang = { lang, 'string' },
-    filetype = { filetype, { 'string', 'table' } },
-  })
+  vim.validate('lang', lang, 'string')
+  vim.validate('filetype', filetype, { 'string', 'table' })
 
   for _, f in ipairs(ensure_list(filetype)) do
     if f ~= '' then
@@ -170,7 +166,12 @@ end
 
 --- Inspects the provided language.
 ---
---- Inspecting provides some useful information on the language like node names, ...
+--- Inspecting provides some useful information on the language like node and field names, ABI
+--- version, and whether the language came from a WASM module.
+---
+--- Node names are returned in a table mapping each node name to a `boolean` indicating whether or
+--- not the node is named (i.e., not anonymous). Anonymous nodes are surrounded with double quotes
+--- (`"`).
 ---
 ---@param lang string Language
 ---@return table

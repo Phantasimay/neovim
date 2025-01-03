@@ -17,10 +17,12 @@
 
 #ifdef HAVE_WASMTIME
 # include <wasm.h>
+
+# include "nvim/os/fs.h"
 #endif
 
-#include "klib/kvec.h"
 #include "nvim/api/private/helpers.h"
+#include "nvim/ascii_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/globals.h"
 #include "nvim/lua/treesitter.h"
@@ -28,7 +30,6 @@
 #include "nvim/map_defs.h"
 #include "nvim/memline.h"
 #include "nvim/memory.h"
-#include "nvim/os/fs.h"
 #include "nvim/pos_defs.h"
 #include "nvim/strings.h"
 #include "nvim/types_defs.h"
@@ -271,12 +272,16 @@ int tslua_inspect_lang(lua_State *L)
       // not used by the API
       continue;
     }
-    lua_createtable(L, 2, 0);  // [retval, symbols, elem]
-    lua_pushstring(L, ts_language_symbol_name(lang, (TSSymbol)i));
-    lua_rawseti(L, -2, 1);
-    lua_pushboolean(L, t == TSSymbolTypeRegular);
-    lua_rawseti(L, -2, 2);  // [retval, symbols, elem]
-    lua_rawseti(L, -2, (int)i);  // [retval, symbols]
+    const char *name = ts_language_symbol_name(lang, (TSSymbol)i);
+    bool named = t != TSSymbolTypeAnonymous;
+    lua_pushboolean(L, named);  // [retval, symbols, is_named]
+    if (!named) {
+      char buf[256];
+      snprintf(buf, sizeof(buf), "\"%s\"", name);
+      lua_setfield(L, -2, buf);  // [retval, symbols]
+    } else {
+      lua_setfield(L, -2, name);  // [retval, symbols]
+    }
   }
 
   lua_setfield(L, -2, "symbols");  // [retval]
@@ -828,6 +833,7 @@ static struct luaL_Reg node_meta[] = {
   { "parent", node_parent },
   { "__has_ancestor", __has_ancestor },
   { "child_containing_descendant", node_child_containing_descendant },
+  { "child_with_descendant", node_child_with_descendant },
   { "iter_children", node_iter_children },
   { "next_sibling", node_next_sibling },
   { "prev_sibling", node_prev_sibling },
@@ -1146,7 +1152,7 @@ static int __has_ancestor(lua_State *L)
   int const pred_len = (int)lua_objlen(L, 2);
 
   TSNode node = ts_tree_root_node(descendant.tree);
-  while (!ts_node_is_null(node)) {
+  while (node.id != descendant.id && !ts_node_is_null(node)) {
     char const *node_type = ts_node_type(node);
     size_t node_type_len = strlen(node_type);
 
@@ -1163,7 +1169,7 @@ static int __has_ancestor(lua_State *L)
       lua_pop(L, 1);
     }
 
-    node = ts_node_child_containing_descendant(node, descendant);
+    node = ts_node_child_with_descendant(node, descendant);
   }
 
   lua_pushboolean(L, false);
@@ -1175,6 +1181,15 @@ static int node_child_containing_descendant(lua_State *L)
   TSNode node = node_check(L, 1);
   TSNode descendant = node_check(L, 2);
   TSNode child = ts_node_child_containing_descendant(node, descendant);
+  push_node(L, child, 1);
+  return 1;
+}
+
+static int node_child_with_descendant(lua_State *L)
+{
+  TSNode node = node_check(L, 1);
+  TSNode descendant = node_check(L, 2);
+  TSNode child = ts_node_child_with_descendant(node, descendant);
   push_node(L, child, 1);
   return 1;
 }
@@ -1514,10 +1529,25 @@ static void query_err_string(const char *src, int error_offset, TSQueryError err
       || error_type == TSQueryErrorField
       || error_type == TSQueryErrorCapture) {
     const char *suffix = src + error_offset;
+    bool is_anonymous = error_type == TSQueryErrorNodeType && suffix[-1] == '"';
     int suffix_len = 0;
     char c = suffix[suffix_len];
-    while (isalnum(c) || c == '_' || c == '-' || c == '.') {
-      c = suffix[++suffix_len];
+    if (is_anonymous) {
+      int backslashes = 0;
+      // Stop when we hit an unescaped double quote
+      while (c != '"' || backslashes % 2 != 0) {
+        if (c == '\\') {
+          backslashes += 1;
+        } else {
+          backslashes = 0;
+        }
+        c = suffix[++suffix_len];
+      }
+    } else {
+      // Stop when we hit the end of the identifier
+      while (isalnum(c) || c == '_' || c == '-' || c == '.') {
+        c = suffix[++suffix_len];
+      }
     }
     snprintf(err, errlen, "\"%.*s\":\n", suffix_len, suffix);
     offset = strlen(err);
